@@ -186,7 +186,12 @@ class MainFrame(wx.Frame):
         def on_reload(event):
             self.choice.SetItems(self._get_serial_ports())
 
-        def on_clicked(event):
+        def on_esp_clicked(event):
+            self.console_ctrl.SetValue("")
+            worker = FlashingThread(self, self._firmware, self._port)
+            worker.start()
+
+        def on_zigbee_clicked(event):
             self.console_ctrl.SetValue("")
             worker = FlashingThread(self, self._firmware, self._port)
             worker.start()
@@ -207,7 +212,7 @@ class MainFrame(wx.Frame):
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
 
-        fgs = wx.FlexGridSizer(7, 2, 10, 10)
+        fgs = wx.FlexGridSizer(9, 2, 10, 10)
 
         self.choice = wx.Choice(panel, choices=self._get_serial_ports())
         self.choice.Bind(wx.EVT_CHOICE, on_select_port)
@@ -217,16 +222,22 @@ class MainFrame(wx.Frame):
         reload_button.Bind(wx.EVT_BUTTON, on_reload)
         reload_button.SetToolTip("Reload serial device list")
 
-        file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
-        file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_file)
+        esp_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
+        esp_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_file)
+
+        zigbee_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
+        zigbee_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_file)
 
         serial_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         serial_boxsizer.Add(self.choice, 1, wx.EXPAND)
         serial_boxsizer.AddStretchSpacer(0)
         serial_boxsizer.Add(reload_button, 0, wx.ALIGN_RIGHT, 20)
 
-        button = wx.Button(panel, -1, "Flash ESP")
-        button.Bind(wx.EVT_BUTTON, on_clicked)
+        esp_button = wx.Button(panel, -1, "Flash ESP")
+        esp_button.Bind(wx.EVT_BUTTON, on_esp_clicked)
+
+        zigbee_button = wx.Button(panel, -1, "Flash Zigbee")
+        zigbee_button.Bind(wx.EVT_BUTTON, on_zigbee_clicked)
 
         logs_button = wx.Button(panel, -1, "View Logs")
         logs_button.Bind(wx.EVT_BUTTON, on_logs_clicked)
@@ -239,23 +250,28 @@ class MainFrame(wx.Frame):
         self.console_ctrl.SetDefaultStyle(wx.TextAttr(wx.WHITE))
 
         port_label = wx.StaticText(panel, label="Serial port")
-        file_label = wx.StaticText(panel, label="Firmware")
+        esp_file_label = wx.StaticText(panel, label="ESP Firmware")
+        zigbee_file_label = wx.StaticText(panel, label="Zigbee Firmware")
 
         console_label = wx.StaticText(panel, label="Console")
 
         fgs.AddMany([
             # Port selection row
             port_label, (serial_boxsizer, 1, wx.EXPAND),
-            # Firmware selection row (growable)
-            file_label, (file_picker, 1, wx.EXPAND),
+            # ESP Firmware selection row (growable)
+            esp_file_label, (esp_file_picker, 1, wx.EXPAND),
+            # Zigbee Firmware selection row (growable)
+            zigbee_file_label, (zigbee_file_picker, 1, wx.EXPAND),
             # Flash ESP button
-            (wx.StaticText(panel, label="")), (button, 1, wx.EXPAND),
+            (wx.StaticText(panel, label="")), (esp_button, 1, wx.EXPAND),
+            # Flash Zigbee button
+            (wx.StaticText(panel, label="")), (zigbee_button, 1, wx.EXPAND),
             # View Logs button
             (wx.StaticText(panel, label="")), (logs_button, 1, wx.EXPAND),
             # Console View (growable)
             (console_label, 1, wx.EXPAND), (self.console_ctrl, 1, wx.EXPAND),
         ])
-        fgs.AddGrowableRow(4, 1)
+        fgs.AddGrowableRow(6, 1)
         fgs.AddGrowableCol(1, 1)
         hbox.Add(fgs, proportion=2, flag=wx.ALL | wx.EXPAND, border=15)
         panel.SetSizer(hbox)
@@ -281,9 +297,9 @@ class MainFrame(wx.Frame):
 class App(wx.App, wx.lib.mixins.inspection.InspectionMixin):
     def OnInit(self):
         wx.SystemOptions.SetOption("mac.window-plain-transition", 1)
-        self.SetAppName("esphome-flasher (Based on NodeMCU PyFlasher)")
+        self.SetAppName("z2m partner flasher (Based on NodeMCU PyFlasher)")
 
-        frame = MainFrame(None, "esphome-flasher (Based on NodeMCU PyFlasher)")
+        frame = MainFrame(None, "z2m partner flasher (Based on NodeMCU PyFlasher)")
         frame.Show()
 
         return True
