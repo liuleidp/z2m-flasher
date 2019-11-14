@@ -91,7 +91,8 @@ class CCLibProxy:
 				# Ping
 				try:
 					self.ping()
-				except IOError:
+				except IOError as e:
+					print(e)
 					raise IOError("Could not find CCLib_proxy device on port %s" % self.ser.name)
 
 			# Check if we should enter debug mode
@@ -145,6 +146,9 @@ class CCLibProxy:
 
 		# No port defined? Raise an exception
 		raise IOError("Could not detect a CCLib_proxy connected on any serial port")
+
+	def close(self):
+		self.ser.close()
 
 	###############################################
 	# Low-level functions
@@ -201,7 +205,12 @@ class CCLibProxy:
 		"""
 
 		# Send the 4-byte command frame
-		self.ser.write( (chr(cmd)+chr(c1)+chr(c2)+chr(c3)).encode() )
+		packet = bytearray()
+		packet.append(cmd)
+		packet.append(c1)
+		packet.append(c2)
+		packet.append(c3)
+		self.ser.write(packet)
 		self.ser.flush()
 
 		# Read frame
@@ -340,7 +349,7 @@ class CCLibProxy:
 			raise IOError("Unable to prepare for brust-write! (Unknown response 0x%02x)" % ans)
 
 		# Start sending data
-		self.ser.write(data.encode())
+		self.ser.write(data)
 		self.ser.flush()
 
 		# Handle response & update debug status
@@ -397,7 +406,7 @@ class CCLibProxy:
 
 		# Start sending data
 		for b in table:
-			self.ser.write(chr(b & 0xFF).encode())
+			self.ser.write((b & 0xFF).to_bytes(1))
 		self.ser.flush()
 
 		# Get confirmation

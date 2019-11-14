@@ -28,6 +28,7 @@ class ChipDriver(CCLibProxy):
 		"""
 		Construct a new chip driver
 		"""
+		self._proxy = proxy
 		# Initialize proxy subclass
 		CCLibProxy.__init__(self, parent=proxy)
 
@@ -95,3 +96,6 @@ class ChipDriver(CCLibProxy):
 		Write any size of buffer in the XDATA region
 		"""
 		raise NotImplementedError("This function is not implemented!")
+
+	def close( self ):
+		self._proxy.close()
