@@ -156,7 +156,8 @@ def run_esphomeflasher(argv):
         time.sleep(0.05)  # get rid of crap sent during baud rate change
         stub_chip._port.flushInput()
 
-    show_logs(stub_chip._port)
+    stub_chip._port.close()
+    # show_logs(stub_chip._port)
 
 
 def main():

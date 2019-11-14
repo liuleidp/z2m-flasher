@@ -145,22 +145,107 @@ class RedirectText:
 
 
 class FlashingThread(threading.Thread):
-    def __init__(self, parent, firmware, port, show_logs=False):
+    def __init__(self, parent, firmware, port, show_logs=False, zigbee=None, cclib=None):
         threading.Thread.__init__(self)
         self.daemon = True
         self._parent = parent
         self._firmware = firmware
         self._port = port
         self._show_logs = show_logs
+        self._zigbee_firmware = zigbee
+        self._cclib_firmware = cclib
 
     def run(self):
         try:
             from esphomeflasher.__main__ import run_esphomeflasher
 
-            argv = ['esphomeflasher', '--port', self._port, self._firmware]
-            if self._show_logs:
-                argv.append('--show-logs')
-            run_esphomeflasher(argv)
+            if self._zigbee_firmware is None:
+                argv = ['esphomeflasher', '--port', self._port, self._firmware]
+                if self._show_logs:
+                    argv.append('--show-logs')
+                run_esphomeflasher(argv)
+
+            else:
+                from esphomeflasher.cclib import CCHEXFile, renderDebugStatus, renderDebugConfig, openCCDebugger
+
+                if self._cclib_firmware is None:
+                    raise Exception('No cclib firmware.')
+
+                print("Flash cclib firmware to ESP first.")
+                # flash cclib firmware to ESP
+                argv = ['esphomeflasher', '--port', self._port, self._cclib_firmware]
+                if self._show_logs:
+                    argv.append('--show-logs')
+                run_esphomeflasher(argv)
+
+                # Read zigbee info
+                print("Read zigbee info.")
+                dbg = openCCDebugger(self._port, enterDebug=False)
+                print("\nDevice information:")
+                print(" IEEE Address : %s" % dbg.getSerial())
+                print("           PC : %04x" % dbg.getPC())
+
+                print("\nDebug status:")
+                renderDebugStatus(dbg.debugStatus)
+                print("\nDebug config:")
+                renderDebugConfig(dbg.debugConfig)
+                print("")
+
+                # Get bluegiga-specific info
+                serial = dbg.getSerial()
+
+                # Parse the HEX file
+                hexFile = CCHEXFile(self._zigbee_firmware)
+                hexFile.load()
+
+                # Display sections & calculate max memory usage
+                maxMem = 0
+                print("Sections in %s:\n" % self._zigbee_firmware)
+                print(" Addr.    Size")
+                print("-------- -------------")
+                for mb in hexFile.memBlocks:
+                	# Calculate top position
+                    memTop = mb.addr + mb.size
+                    if memTop > maxMem:
+                        maxMem = memTop
+
+                    # Print portion
+                    print(" 0x%04x   %i B " % (mb.addr + offset, mb.size))
+                print("")
+
+                # Check for oversize data
+                if maxMem > (dbg.chipInfo['flash'] * 1024):
+                    print("ERROR: Data too bit to fit in chip's memory!")
+                    print("max mem %x, flash size %x" % (maxMem, dbg.chipInfo['flash'] * 1024))
+
+                # Flashing messages
+                print("\nFlashing:")
+
+                # Send chip erase
+                if True:
+                    print(" - Chip erase...")
+                    dbg.chipErase()
+
+                # Flash memory
+                dbg.pauseDMA(False)
+                print(" - Flashing %i memory blocks..." % len(hexFile.memBlocks))
+                for mb in hexFile.memBlocks:
+
+                    # Flash memory block
+                    print(" -> 0x%04x : %i bytes " % (mb.addr + offset, mb.size))
+                    dbg.writeCODE( mb.addr + offset, mb.bytes, verify=True, showProgress=True )
+
+                # Done
+                print("\nCompleted")
+                print("")
+
+                # flash origin firmware
+                print("Restore esp firmware.")
+                argv = ['esphomeflasher', '--port', self._port, self._firmware]
+                if self._show_logs:
+                    argv.append('--show-logs')
+                run_esphomeflasher(argv)
+
         except Exception as e:
             print("Unexpected error: {}".format(e))
             raise
@@ -171,7 +256,9 @@ class MainFrame(wx.Frame):
         wx.Frame.__init__(self, parent, -1, title, size=(725, 650),
                           style=wx.DEFAULT_FRAME_STYLE | wx.NO_FULL_REPAINT_ON_RESIZE)
 
-        self._firmware = None
+        self._esp_firmware = None
+        self._cclib_firmware = None
+        self._zigbee_firmware = None
         self._port = None
 
         self._init_ui()
@@ -188,12 +275,12 @@ class MainFrame(wx.Frame):
 
         def on_esp_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashingThread(self, self._firmware, self._port)
+            worker = FlashingThread(self, self._esp_firmware, self._port)
             worker.start()
 
         def on_zigbee_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashingThread(self, self._firmware, self._port)
+            worker = FlashingThread(self, self._esp_firmware, self._port, zigbee=self._zigbee_firmware, cclib=self._cclib_firmware)
             worker.start()
 
         def on_logs_clicked(event):
@@ -205,14 +292,20 @@ class MainFrame(wx.Frame):
             choice = event.GetEventObject()
             self._port = choice.GetString(choice.GetSelection())
 
-        def on_pick_file(event):
-            self._firmware = event.GetPath().replace("'", "")
+        def on_pick_esp_file(event):
+            self._esp_firmware = event.GetPath().replace("'", "")
+
+        def on_pick_cclib_file(event):
+            self._cclib_firmware = event.GetPath().replace("'", "")
+
+        def on_pick_zigbee_file(event):
+            self._zigbee_firmware = event.GetPath().replace("'", "")
 
         panel = wx.Panel(self)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
 
-        fgs = wx.FlexGridSizer(9, 2, 10, 10)
+        fgs = wx.FlexGridSizer(10, 2, 10, 10)
 
         self.choice = wx.Choice(panel, choices=self._get_serial_ports())
         self.choice.Bind(wx.EVT_CHOICE, on_select_port)
@@ -223,10 +316,13 @@ class MainFrame(wx.Frame):
         reload_button.SetToolTip("Reload serial device list")
 
         esp_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
-        esp_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_file)
+        esp_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_esp_file)
+
+        cclib_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
+        cclib_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_cclib_file)
 
         zigbee_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
-        zigbee_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_file)
+        zigbee_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_zigbee_file)
 
         serial_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         serial_boxsizer.Add(self.choice, 1, wx.EXPAND)
@@ -251,6 +347,7 @@ class MainFrame(wx.Frame):
 
         port_label = wx.StaticText(panel, label="Serial port")
         esp_file_label = wx.StaticText(panel, label="ESP Firmware")
+        cclib_file_label = wx.StaticText(panel, label="CClib Firmware")
         zigbee_file_label = wx.StaticText(panel, label="Zigbee Firmware")
 
         console_label = wx.StaticText(panel, label="Console")
@@ -260,6 +357,8 @@ class MainFrame(wx.Frame):
             port_label, (serial_boxsizer, 1, wx.EXPAND),
             # ESP Firmware selection row (growable)
             esp_file_label, (esp_file_picker, 1, wx.EXPAND),
+            # CClib Firmware selection row (growable)
+            cclib_file_label, (cclib_file_picker, 1, wx.EXPAND),
             # Zigbee Firmware selection row (growable)
             zigbee_file_label, (zigbee_file_picker, 1, wx.EXPAND),
             # Flash ESP button
@@ -271,7 +370,7 @@ class MainFrame(wx.Frame):
             # Console View (growable)
             (console_label, 1, wx.EXPAND), (self.console_ctrl, 1, wx.EXPAND),
         ])
-        fgs.AddGrowableRow(6, 1)
+        fgs.AddGrowableRow(7, 1)
         fgs.AddGrowableCol(1, 1)
         hbox.Add(fgs, proportion=2, flag=wx.ALL | wx.EXPAND, border=15)
         panel.SetSizer(hbox)

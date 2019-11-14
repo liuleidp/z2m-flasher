@@ -25,6 +25,7 @@ REQUIRES = [
     'wxpython>=4.0,<5.0',
     'esptool==2.8',
     'requests>=2.0,<3',
+    'pyserial==3.0.1',
 ]
 
 setup(
