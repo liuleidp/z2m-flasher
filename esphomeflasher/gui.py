@@ -25,6 +25,7 @@ COLORS = {
 }
 FORE_COLORS = {**COLORS, None: wx.WHITE}
 BACK_COLORS = {**COLORS, None: wx.BLACK}
+FLASH_DELAY_S = 5
 
 
 # See discussion at http://stackoverflow.com/q/41101897/131929
@@ -158,6 +159,7 @@ class FlashingThread(threading.Thread):
     def run(self):
         try:
             from esphomeflasher.__main__ import run_esphomeflasher
+            import time
 
             if self._zigbee_firmware is None:
                 argv = ['esphomeflasher', '--port', self._port, self._firmware]
@@ -177,6 +179,11 @@ class FlashingThread(threading.Thread):
                 if self._show_logs:
                     argv.append('--show-logs')
                 run_esphomeflasher(argv)
+
+                print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
+                for s in range(FLASH_DELAY_S):
+                    print("%d ..." % s)
+                    time.sleep(1)
 
                 # Read zigbee info
                 print("Read zigbee info.")
@@ -210,7 +217,7 @@ class FlashingThread(threading.Thread):
                         maxMem = memTop
 
                     # Print portion
-                    print(" 0x%04x   %i B " % (mb.addr + offset, mb.size))
+                    print(" 0x%04x   %i B " % (mb.addr, mb.size))
                 print("")
 
                 # Check for oversize data
@@ -232,15 +239,20 @@ class FlashingThread(threading.Thread):
                 for mb in hexFile.memBlocks:
 
                     # Flash memory block
-                    print(" -> 0x%04x : %i bytes " % (mb.addr + offset, mb.size))
-                    dbg.writeCODE( mb.addr + offset, mb.bytes, verify=True, showProgress=True )
+                    print(" -> 0x%04x : %i bytes " % (mb.addr, mb.size))
+                    dbg.writeCODE( mb.addr, mb.bytes, verify=True, showProgress=True )
 
                 # Done
+                dbg.close()
                 print("\nCompleted")
                 print("")
 
                 # flash origin firmware
                 print("Restore esp firmware.")
+                print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
+                for s in range(FLASH_DELAY_S):
+                    print("%d ..." % s)
+                    time.sleep(1)
                 argv = ['esphomeflasher', '--port', self._port, self._firmware]
                 if self._show_logs:
                     argv.append('--show-logs')
