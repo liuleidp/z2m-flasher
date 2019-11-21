@@ -303,24 +303,52 @@ class MainFrame(wx.Frame):
         def on_info_clicked(event):
             import json
 
-            with open('config.json', 'r+') as f:
-                try:
-                    config = json.load(f)
-                    print("Exist config {}"%config)
-                except TypeError:
-                    pass
+            config = {}
+            f = None
+            try:
+                f = open('config.json', 'r+')
+                config = json.load(f)
+                print(f'Exist config {config}')
+            except:
+                f = open('config.json', 'w+')
+                print('New config file')
 
             ssid = self._ssidtc.GetValue()
+            if ssid:
+                config['ssid'] = ssid
             passwd = self._passwdtc.GetValue()
+            if passwd:
+                config['password'] = passwd
             hostname = self._hostnametc.GetValue()
+            if hostname:
+                config['hostname'] = hostname
             tcp_port = self._tcptc.GetValue()
+            if tcp_port:
+                config['tcpPort'] = int(tcp_port)
             mqttip = self._mqttiptc.GetValue()
+            if mqttip:
+                config['mqttServer'] = mqttip
             mqttport = self._mqttporttc.GetValue()
+            if mqttport:
+                config['mqttPort'] = int(mqttport)
             mqttuser = self._mqttusertc.GetValue()
+            if mqttuser:
+                config['mqttUser'] = mqttuser
             mqttpasswd = self._mqttpasswdtc.GetValue()
+            if mqttpasswd:
+                config['mqttPass'] = mqttpasswd
+            clientID = self._mqttClientIDtc.GetValue()
+            if clientID:
+                config['mqttClientID'] = clientID
             mqttPub = self._mqttPubTopictc.GetValue()
+            if mqttPub:
+                config['mqttPubTopic'] = mqttPub
             mqttSub = self._mqttSubTopictc.GetValue()
-            print(ssid+passwd+hostname+tcp_port+mqttip+mqttport+mqttuser+mqttpasswd+mqttPub+mqttSub)
+            if mqttSub:
+                config['mqttSubTopic'] = mqttSub
+
+            print(f'New config {config}')
+            json.dump(config, f)
 
         def on_select_port(event):
             choice = event.GetEventObject()
@@ -430,10 +458,16 @@ class MainFrame(wx.Frame):
         mqtt_boxsizer.Add(self._mqttpasswdtc, 0, wx.ALIGN_CENTER)
         
         mqtt2_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+        mqttClientIDst = wx.StaticText(panel, label='Client ID')
+        self._mqttClientIDtc = wx.TextCtrl(panel)
         mqttPubTopicst = wx.StaticText(panel, label='Publish topic')
         self._mqttPubTopictc = wx.TextCtrl(panel)
         mqttSubTopicst = wx.StaticText(panel, label='Subscribe topic')
         self._mqttSubTopictc = wx.TextCtrl(panel)
+        mqtt2_boxsizer.Add(mqttClientIDst, 0, wx.ALIGN_CENTER)
+        mqtt2_boxsizer.AddStretchSpacer(0)
+        mqtt2_boxsizer.Add(self._mqttClientIDtc, 0, wx.ALIGN_CENTER)
+        mqtt2_boxsizer.AddStretchSpacer(0)
         mqtt2_boxsizer.Add(mqttPubTopicst, 0, wx.ALIGN_CENTER)
         mqtt2_boxsizer.AddStretchSpacer(0)
         mqtt2_boxsizer.Add(self._mqttPubTopictc, 0, wx.ALIGN_CENTER)
