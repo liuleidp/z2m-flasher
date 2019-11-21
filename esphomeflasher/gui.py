@@ -300,6 +300,28 @@ class MainFrame(wx.Frame):
             worker = FlashingThread(self, 'dummy', self._port, show_logs=True)
             worker.start()
 
+        def on_info_clicked(event):
+            import json
+
+            with open('config.json', 'r+') as f:
+                try:
+                    config = json.load(f)
+                    print("Exist config {}"%config)
+                except TypeError:
+                    pass
+
+            ssid = self._ssidtc.GetValue()
+            passwd = self._passwdtc.GetValue()
+            hostname = self._hostnametc.GetValue()
+            tcp_port = self._tcptc.GetValue()
+            mqttip = self._mqttiptc.GetValue()
+            mqttport = self._mqttporttc.GetValue()
+            mqttuser = self._mqttusertc.GetValue()
+            mqttpasswd = self._mqttpasswdtc.GetValue()
+            mqttPub = self._mqttPubTopictc.GetValue()
+            mqttSub = self._mqttSubTopictc.GetValue()
+            print(ssid+passwd+hostname+tcp_port+mqttip+mqttport+mqttuser+mqttpasswd+mqttPub+mqttSub)
+
         def on_select_port(event):
             choice = event.GetEventObject()
             self._port = choice.GetString(choice.GetSelection())
@@ -341,11 +363,84 @@ class MainFrame(wx.Frame):
         serial_boxsizer.AddStretchSpacer(0)
         serial_boxsizer.Add(reload_button, 0, wx.ALIGN_RIGHT, 20)
 
-        esp_button = wx.Button(panel, -1, "Flash ESP")
+        esp_button = wx.Button(panel, -1, "ESP")
         esp_button.Bind(wx.EVT_BUTTON, on_esp_clicked)
 
-        zigbee_button = wx.Button(panel, -1, "Flash Zigbee")
+        info_button = wx.Button(panel, -1, "WiFi/MQTT")
+        info_button.Bind(wx.EVT_BUTTON, on_info_clicked)
+
+        zigbee_button = wx.Button(panel, -1, "Zigbee")
         zigbee_button.Bind(wx.EVT_BUTTON, on_zigbee_clicked)
+
+        flash_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+        flash_boxsizer.Add(esp_button, 0, wx.ALIGN_CENTER)
+        flash_boxsizer.AddStretchSpacer(0)
+        flash_boxsizer.Add(info_button, 0, wx.ALIGN_CENTER)
+        flash_boxsizer.AddStretchSpacer(0)
+        flash_boxsizer.Add(zigbee_button, 0, wx.ALIGN_CENTER)
+
+        wifi_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+        ssidst = wx.StaticText(panel, label='ssid')
+        self._ssidtc = wx.TextCtrl(panel)
+        passwdst = wx.StaticText(panel, label='passwd')
+        self._passwdtc = wx.TextCtrl(panel)
+        hostnamest = wx.StaticText(panel, label='hostname')
+        self._hostnametc = wx.TextCtrl(panel)
+        tcpst = wx.StaticText(panel, label='tcp port')
+        self._tcptc = wx.TextCtrl(panel)
+        wifi_boxsizer.Add(ssidst, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(self._ssidtc, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(passwdst, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(self._passwdtc, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(hostnamest, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(self._hostnametc, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(tcpst, 0, wx.ALIGN_CENTER)
+        wifi_boxsizer.AddStretchSpacer(0)
+        wifi_boxsizer.Add(self._tcptc, 0, wx.ALIGN_CENTER)
+
+        mqtt_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+        mqttipst = wx.StaticText(panel, label='ip')
+        self._mqttiptc = wx.TextCtrl(panel)
+        mqttportst = wx.StaticText(panel, label='port')
+        self._mqttporttc = wx.TextCtrl(panel)
+        mqttuserst = wx.StaticText(panel, label='user')
+        self._mqttusertc = wx.TextCtrl(panel)
+        mqttpasswdst = wx.StaticText(panel, label='password')
+        self._mqttpasswdtc = wx.TextCtrl(panel)
+        mqtt_boxsizer.Add(mqttipst, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(self._mqttiptc, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(mqttportst, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(self._mqttporttc, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(mqttuserst, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(self._mqttusertc, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(mqttpasswdst, 0, wx.ALIGN_CENTER)
+        mqtt_boxsizer.AddStretchSpacer(0)
+        mqtt_boxsizer.Add(self._mqttpasswdtc, 0, wx.ALIGN_CENTER)
+        
+        mqtt2_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+        mqttPubTopicst = wx.StaticText(panel, label='Publish topic')
+        self._mqttPubTopictc = wx.TextCtrl(panel)
+        mqttSubTopicst = wx.StaticText(panel, label='Subscribe topic')
+        self._mqttSubTopictc = wx.TextCtrl(panel)
+        mqtt2_boxsizer.Add(mqttPubTopicst, 0, wx.ALIGN_CENTER)
+        mqtt2_boxsizer.AddStretchSpacer(0)
+        mqtt2_boxsizer.Add(self._mqttPubTopictc, 0, wx.ALIGN_CENTER)
+        mqtt2_boxsizer.AddStretchSpacer(0)
+        mqtt2_boxsizer.Add(mqttSubTopicst, 0, wx.ALIGN_CENTER)
+        mqtt2_boxsizer.AddStretchSpacer(0)
+        mqtt2_boxsizer.Add(self._mqttSubTopictc, 0, wx.ALIGN_CENTER)
 
         logs_button = wx.Button(panel, -1, "View Logs")
         logs_button.Bind(wx.EVT_BUTTON, on_logs_clicked)
@@ -361,6 +456,9 @@ class MainFrame(wx.Frame):
         esp_file_label = wx.StaticText(panel, label="ESP Firmware")
         cclib_file_label = wx.StaticText(panel, label="CClib Firmware")
         zigbee_file_label = wx.StaticText(panel, label="Zigbee Firmware")
+        flash_file_label = wx.StaticText(panel, label="Flash")
+        wifi_info_label = wx.StaticText(panel, label="WiFi info")
+        MQTT_info_label = wx.StaticText(panel, label="MQTT info")
 
         console_label = wx.StaticText(panel, label="Console")
 
@@ -373,16 +471,19 @@ class MainFrame(wx.Frame):
             cclib_file_label, (cclib_file_picker, 1, wx.EXPAND),
             # Zigbee Firmware selection row (growable)
             zigbee_file_label, (zigbee_file_picker, 1, wx.EXPAND),
-            # Flash ESP button
-            (wx.StaticText(panel, label="")), (esp_button, 1, wx.EXPAND),
-            # Flash Zigbee button
-            (wx.StaticText(panel, label="")), (zigbee_button, 1, wx.EXPAND),
+            # Flash firmware button
+            flash_file_label, (flash_boxsizer, 1, wx.EXPAND),
+            # WiFi info
+            wifi_info_label, (wifi_boxsizer, 1, wx.EXPAND),
+            # MQTT info
+            MQTT_info_label, (mqtt_boxsizer, 1, wx.EXPAND),
+            (wx.StaticText(panel, label="")), (mqtt2_boxsizer, 1, wx.EXPAND),
             # View Logs button
             (wx.StaticText(panel, label="")), (logs_button, 1, wx.EXPAND),
             # Console View (growable)
             (console_label, 1, wx.EXPAND), (self.console_ctrl, 1, wx.EXPAND),
         ])
-        fgs.AddGrowableRow(7, 1)
+        fgs.AddGrowableRow(9, 1)
         fgs.AddGrowableCol(1, 1)
         hbox.Add(fgs, proportion=2, flag=wx.ALL | wx.EXPAND, border=15)
         panel.SetSizer(hbox)
