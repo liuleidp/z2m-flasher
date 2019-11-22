@@ -146,7 +146,7 @@ class RedirectText:
 
 
 class FlashingThread(threading.Thread):
-    def __init__(self, parent, firmware, port, show_logs=False, zigbee=None, cclib=None):
+    def __init__(self, parent, firmware, port, show_logs=False, zigbee=None, cclib=None, spiffs=None):
         threading.Thread.__init__(self)
         self.daemon = True
         self._parent = parent
@@ -155,6 +155,7 @@ class FlashingThread(threading.Thread):
         self._show_logs = show_logs
         self._zigbee_firmware = zigbee
         self._cclib_firmware = cclib
+        self._spiffs = spiffs
 
     def run(self):
         try:
@@ -302,15 +303,21 @@ class MainFrame(wx.Frame):
 
         def on_info_clicked(event):
             import json
+            import os
+            from esphomeflasher.spiffsgen import (
+                SpiffsBuildConfig, SPIFFS_PAGE_IX_LEN, SPIFFS_BLOCK_IX_LEN, SPIFFS_OBJ_ID_LEN,
+                SPIFFS_SPAN_IX_LEN, SpiffsFS)
 
             config = {}
             f = None
             try:
-                f = open('config.json', 'r+')
+                if not os.path.exists('data'):
+                    os.makedirs('data')
+                f = open(os.path.join('data', 'config.json'), 'r+')
                 config = json.load(f)
                 print(f'Exist config {config}')
             except:
-                f = open('config.json', 'w+')
+                f = open(os.path.join('data', 'config.json'), 'w+')
                 print('New config file')
 
             ssid = self._ssidtc.GetValue()
@@ -349,6 +356,24 @@ class MainFrame(wx.Frame):
 
             print(f'New config {config}')
             json.dump(config, f)
+
+            with open('spiffs.bin', "wb") as image_file:
+                image_size = 110592
+                spiffs_build_default = SpiffsBuildConfig(256, SPIFFS_PAGE_IX_LEN,
+                                                4096, SPIFFS_BLOCK_IX_LEN, 4,
+                                                32, SPIFFS_OBJ_ID_LEN, SPIFFS_SPAN_IX_LEN,
+                                                True, True, "little", True, True)
+
+                spiffs = SpiffsFS(image_size, spiffs_build_default)
+
+                for root, dirs, files in os.walk('data', followlinks=False):
+                    for f in files:
+                        full_path = os.path.join(root, f)
+                        spiffs.create_file("/" + os.path.relpath(full_path, 'data').replace("\\", "/"), full_path)
+
+                image = spiffs.to_binary()
+
+                image_file.write(image)
 
         def on_select_port(event):
             choice = event.GetEventObject()
