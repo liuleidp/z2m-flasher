@@ -163,10 +163,17 @@ def format_bootloader_path(path, flash_mode, flash_freq):
 
 
 def configure_write_flash_args(info, firmware_path, flash_size,
-                               bootloader_path, partitions_path, otadata_path):
+                               bootloader_path, partitions_path, otadata_path,
+                               offset='0'):
     addr_filename = []
     firmware = open_downloadable_binary(firmware_path)
-    flash_mode, flash_freq = read_firmware_info(firmware)
+    try:
+        flash_mode, flash_freq = read_firmware_info(firmware)
+    except:
+        if offset != '0':
+            flash_mode = 'qio'
+            flash_freq = '40m'
+
     if isinstance(info, ESP32ChipInfo):
         if flash_freq in ('26m', '20m'):
             raise EsphomeflasherError(
@@ -181,7 +188,7 @@ def configure_write_flash_args(info, firmware_path, flash_size,
         addr_filename.append((0xE000, otadata))
         addr_filename.append((0x10000, firmware))
     else:
-        addr_filename.append((0x0, firmware))
+        addr_filename.append((int(offset), firmware))
     return MockEsptoolArgs(flash_size, addr_filename, flash_mode, flash_freq)
 
 

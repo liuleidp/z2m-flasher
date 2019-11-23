@@ -146,46 +146,31 @@ class RedirectText:
 
 
 class FlashingThread(threading.Thread):
-    def __init__(self, parent, firmware, port, show_logs=False, zigbee=None, cclib=None, spiffs=None):
+    def __init__(self, parent, firmware, port, pos='0', show_logs=False, zigbee=False, erase=True):
         threading.Thread.__init__(self)
         self.daemon = True
         self._parent = parent
         self._firmware = firmware
         self._port = port
+        self._start_pos = pos
         self._show_logs = show_logs
         self._zigbee_firmware = zigbee
-        self._cclib_firmware = cclib
-        self._spiffs = spiffs
+        self._erase_firmware = erase
 
     def run(self):
         try:
             from esphomeflasher.__main__ import run_esphomeflasher
-            import time
 
-            if self._zigbee_firmware is None:
-                argv = ['esphomeflasher', '--port', self._port, self._firmware]
+            if not self._zigbee_firmware:
+                argv = ['esphomeflasher', '--port', self._port, '--offset', self._start_pos, self._firmware]
                 if self._show_logs:
                     argv.append('--show-logs')
+                if not self._erase_firmware:
+                    argv.append('--no-erase')
                 run_esphomeflasher(argv)
-
+                return
             else:
                 from esphomeflasher.cclib import CCHEXFile, renderDebugStatus, renderDebugConfig, openCCDebugger
-
-                if self._cclib_firmware is None:
-                    raise Exception('No cclib firmware.')
-
-                print("Flash cclib firmware to ESP first.")
-                # flash cclib firmware to ESP
-                argv = ['esphomeflasher', '--port', self._port, self._cclib_firmware]
-                if self._show_logs:
-                    argv.append('--show-logs')
-                run_esphomeflasher(argv)
-
-                print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
-                for s in range(FLASH_DELAY_S):
-                    print("%d ..." % s)
-                    time.sleep(1)
-
                 # Read zigbee info
                 print("Read zigbee info.")
                 dbg = openCCDebugger(self._port, enterDebug=False)
@@ -203,12 +188,12 @@ class FlashingThread(threading.Thread):
                 serial = dbg.getSerial()
 
                 # Parse the HEX file
-                hexFile = CCHEXFile(self._zigbee_firmware)
+                hexFile = CCHEXFile(self._firmware)
                 hexFile.load()
 
                 # Display sections & calculate max memory usage
                 maxMem = 0
-                print("Sections in %s:\n" % self._zigbee_firmware)
+                print("Sections in %s:\n" % self._firmware)
                 print(" Addr.    Size")
                 print("-------- -------------")
                 for mb in hexFile.memBlocks:
@@ -248,21 +233,90 @@ class FlashingThread(threading.Thread):
                 print("\nCompleted")
                 print("")
 
-                # flash origin firmware
-                print("Restore esp firmware.")
-                print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
-                for s in range(FLASH_DELAY_S):
-                    print("%d ..." % s)
-                    time.sleep(1)
-                argv = ['esphomeflasher', '--port', self._port, self._firmware]
-                if self._show_logs:
-                    argv.append('--show-logs')
-                run_esphomeflasher(argv)
-
         except Exception as e:
             print("Unexpected error: {}".format(e))
             raise
 
+class FlashZigbeeThread(threading.Thread):
+    def __init__(self, parent, port, cclib, zigbee, restore=None):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        self._parent = parent
+        self._cclib_firmware = cclib
+        self._port = port
+        self._zigbee_firmware = zigbee
+        self._restore_firmware = restore
+
+    def run(self):
+        import time
+        
+        print("Flash cclib firmware to ESP first.")
+        # flash cclib firmware to ESP
+        cclibworker = FlashingThread(self, self._cclib_firmware, self._port)
+        cclibworker.start()
+        cclibworker.join()
+        print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
+        for s in range(FLASH_DELAY_S):
+            print("%d ..." % s)
+            time.sleep(1)
+        print("Flash Zigbee firmware to module.")
+        zigbeeworker = FlashingThread(self, self._zigbee_firmware, self._port, zigbee=True)
+        zigbeeworker.start()
+        zigbeeworker.join()
+
+        if self._restore_firmware is not None:
+            # Restore esp firmware.
+            print("Restore esp firmware.")
+            print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
+            for s in range(FLASH_DELAY_S):
+                print("%d ..." % s)
+                time.sleep(1)
+            espworker = FlashingThread(self, self._esp_firmware, self._port)
+            espworker.start()
+            espworker.join()
+
+
+class FlashAllThread(threading.Thread):
+    def __init__(self, parent, port, cclib, zigbee, esp, spiffs):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        self._parent = parent
+        self._cclib_firmware = cclib
+        self._port = port
+        self._zigbee_firmware = zigbee
+        self._esp_firmware = esp
+        self._spiffs = spiffs
+
+    def run(self):
+        import time
+
+        print("Flash cclib firmware to ESP first.")
+        # flash cclib firmware to ESP
+        cclibworker = FlashingThread(self, self._cclib_firmware, self._port)
+        cclibworker.start()
+        cclibworker.join()
+        print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
+        for s in range(FLASH_DELAY_S):
+            print("%d ..." % s)
+            time.sleep(1)
+        print("Flash Zigbee firmware to module.")
+        zigbeeworker = FlashingThread(self, self._zigbee_firmware, self._port, zigbee=True)
+        zigbeeworker.start()
+        zigbeeworker.join()
+        # Flash esp firmware.
+        print("Flash esp firmware.")
+        print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
+        for s in range(FLASH_DELAY_S):
+            print("%d ..." % s)
+            time.sleep(1)
+        espworker = FlashingThread(self, self._esp_firmware, self._port)
+        espworker.start()
+        espworker.join()
+        # Flash wifi/mqtt info.
+        print("Flash wifi info.")
+        spiffsworker = FlashingThread(self, self._spiffs, self._port, pos = '1966080', erase=False)
+        spiffsworker.start()
+        spiffsworker.join()
 
 class MainFrame(wx.Frame):
     def __init__(self, parent, title):
@@ -293,15 +347,10 @@ class MainFrame(wx.Frame):
 
         def on_zigbee_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashingThread(self, self._esp_firmware, self._port, zigbee=self._zigbee_firmware, cclib=self._cclib_firmware)
+            worker = FlashZigbeeThread(self, self._port, self._cclib_firmware, self._zigbee_firmware, self._esp_firmware)
             worker.start()
 
-        def on_logs_clicked(event):
-            self.console_ctrl.SetValue("")
-            worker = FlashingThread(self, 'dummy', self._port, show_logs=True)
-            worker.start()
-
-        def on_info_clicked(event):
+        def gen_spiffs():
             import json
             import os
             from esphomeflasher.spiffsgen import (
@@ -370,10 +419,29 @@ class MainFrame(wx.Frame):
                     for f in files:
                         full_path = os.path.join(root, f)
                         spiffs.create_file("/" + os.path.relpath(full_path, 'data').replace("\\", "/"), full_path)
+                        print("/" + os.path.relpath(full_path, 'data').replace("\\", "/"))
 
                 image = spiffs.to_binary()
 
                 image_file.write(image)
+
+        def on_logs_clicked(event):
+            self.console_ctrl.SetValue("")
+            worker = FlashingThread(self, 'dummy', self._port, show_logs=True)
+            worker.start()
+
+        def on_info_clicked(event):
+            self.console_ctrl.SetValue("")
+            gen_spiffs()
+            worker = FlashingThread(self, 'spiffs.bin', self._port, pos = '1966080', erase = False)
+            worker.start()
+
+        def on_flash_all_clicked(event):
+            self.console_ctrl.SetValue("")
+            gen_spiffs()
+            worker = FlashAllThread(self, self._port, self._cclib_firmware,
+                                    self._zigbee_firmware, self._esp_firmware, 'spiffs.bin')
+            worker.start()
 
         def on_select_port(event):
             choice = event.GetEventObject()
@@ -425,12 +493,17 @@ class MainFrame(wx.Frame):
         zigbee_button = wx.Button(panel, -1, "Zigbee")
         zigbee_button.Bind(wx.EVT_BUTTON, on_zigbee_clicked)
 
+        flash_all_button = wx.Button(panel, -1, "All")
+        flash_all_button.Bind(wx.EVT_BUTTON, on_flash_all_clicked)
+
         flash_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         flash_boxsizer.Add(esp_button, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
         flash_boxsizer.Add(info_button, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
         flash_boxsizer.Add(zigbee_button, 0, wx.ALIGN_CENTER)
+        flash_boxsizer.AddStretchSpacer(0)
+        flash_boxsizer.Add(flash_all_button, 0, wx.ALIGN_CENTER)
 
         wifi_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         ssidst = wx.StaticText(panel, label='ssid')

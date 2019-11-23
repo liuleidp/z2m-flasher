@@ -38,6 +38,7 @@ def parse_args(argv):
                         help="Do not erase flash before flashing",
                         action='store_true')
     parser.add_argument('--show-logs', help="Only show logs", action='store_true')
+    parser.add_argument('--offset', help="firmware start position offset", default='0')
     parser.add_argument('binary', help="The binary image to flash.")
 
     return parser.parse_args(argv[1:])
@@ -88,6 +89,9 @@ def run_esphomeflasher(argv):
         show_logs(serial_port)
         return
 
+    if args.offset:
+        print("Firmware start position: {}".format(args.offset))
+
     try:
         firmware = open(args.binary, 'rb')
     except IOError as err:
@@ -124,7 +128,7 @@ def run_esphomeflasher(argv):
 
     mock_args = configure_write_flash_args(info, firmware, flash_size,
                                            args.bootloader, args.partitions,
-                                           args.otadata)
+                                           args.otadata, args.offset)
 
     print(" - Flash Mode: {}".format(mock_args.flash_mode))
     print(" - Flash Frequency: {}Hz".format(mock_args.flash_freq.upper()))
