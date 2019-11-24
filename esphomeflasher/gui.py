@@ -131,7 +131,7 @@ class RedirectText:
                 current_value = self._out.GetValue()
                 last_newline = current_value.rfind("\n")
                 wx.CallAfter(self._out.Remove, last_newline + 1, len(current_value))
-                # self._line += '\n'
+                self._line += '\n'
                 self._write_line()
                 self._line = ''
                 continue
@@ -271,7 +271,7 @@ class FlashZigbeeThread(threading.Thread):
             for s in range(FLASH_DELAY_S):
                 print("%d ..." % s)
                 time.sleep(1)
-            espworker = FlashingThread(self, self._esp_firmware, self._port)
+            espworker = FlashingThread(self, self._restore_firmware, self._port)
             espworker.start()
             espworker.join()
 
@@ -351,11 +351,9 @@ class MainFrame(wx.Frame):
             worker.start()
 
         def gen_spiffs():
+            import subprocess
             import json
             import os
-            from esphomeflasher.spiffsgen import (
-                SpiffsBuildConfig, SPIFFS_PAGE_IX_LEN, SPIFFS_BLOCK_IX_LEN, SPIFFS_OBJ_ID_LEN,
-                SPIFFS_SPAN_IX_LEN, SpiffsFS)
 
             config = {}
             f = None
@@ -406,24 +404,14 @@ class MainFrame(wx.Frame):
             print(f'New config {config}')
             json.dump(config, f)
 
-            with open('spiffs.bin', "wb") as image_file:
-                image_size = 110592
-                spiffs_build_default = SpiffsBuildConfig(256, SPIFFS_PAGE_IX_LEN,
-                                                4096, SPIFFS_BLOCK_IX_LEN, 4,
-                                                32, SPIFFS_OBJ_ID_LEN, SPIFFS_SPAN_IX_LEN,
-                                                True, True, "little", True, True)
-
-                spiffs = SpiffsFS(image_size, spiffs_build_default)
-
-                for root, dirs, files in os.walk('data', followlinks=False):
-                    for f in files:
-                        full_path = os.path.join(root, f)
-                        spiffs.create_file("/" + os.path.relpath(full_path, 'data').replace("\\", "/"), full_path)
-                        print("/" + os.path.relpath(full_path, 'data').replace("\\", "/"))
-
-                image = spiffs.to_binary()
-
-                image_file.write(image)
+            if getattr(sys, 'frozen', None):
+                basedir = sys._MEIPASS
+            else:
+                basedir = os.path.dirname(__file__)
+            mkspiffsexe=os.path.join(basedir, 'tools', 'mkspiffs', 'win', 'mkspiffs.exe')
+            print(f'Create spiffs use {mkspiffsexe}')
+            #mkspiffs.exe -c data -p 256 -b 4096 -s 110592 spiffs.bin
+            subprocess.run([mkspiffsexe, "-c", "data", "-p", "256", "-b", "4096", "-s", "110592", "spiffs.bin"])
 
         def on_logs_clicked(event):
             self.console_ctrl.SetValue("")
