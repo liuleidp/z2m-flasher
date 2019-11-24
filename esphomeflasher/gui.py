@@ -362,6 +362,7 @@ class MainFrame(wx.Frame):
                     os.makedirs('data')
                 f = open(os.path.join('data', 'config.json'), 'r+')
                 config = json.load(f)
+                f.seek(0, 0)
                 print(f'Exist config {config}')
             except:
                 f = open(os.path.join('data', 'config.json'), 'w+')
@@ -370,39 +371,62 @@ class MainFrame(wx.Frame):
             ssid = self._ssidtc.GetValue()
             if ssid:
                 config['ssid'] = ssid
+            elif 'ssid' not in config:
+                config['ssid'] = ""
             passwd = self._passwdtc.GetValue()
             if passwd:
                 config['password'] = passwd
+            elif 'password' not in config:
+                config['password'] = ""
             hostname = self._hostnametc.GetValue()
             if hostname:
                 config['hostname'] = hostname
+            elif 'hostname' not in config:
+                config['hostname'] = ""
             tcp_port = self._tcptc.GetValue()
             if tcp_port:
                 config['tcpPort'] = int(tcp_port)
+            elif 'tcpPort' not in config:
+                config['tcpPort'] = 8880
             mqttip = self._mqttiptc.GetValue()
             if mqttip:
                 config['mqttServer'] = mqttip
+            elif 'mqttServer' not in config:
+                config['mqttServer'] = ""
             mqttport = self._mqttporttc.GetValue()
             if mqttport:
                 config['mqttPort'] = int(mqttport)
+            elif 'mqttPort' not in config:
+                config['mqttPort'] = 1883
             mqttuser = self._mqttusertc.GetValue()
             if mqttuser:
                 config['mqttUser'] = mqttuser
+            elif 'mqttUser' not in config:
+                config['mqttUser'] = ""
             mqttpasswd = self._mqttpasswdtc.GetValue()
             if mqttpasswd:
                 config['mqttPass'] = mqttpasswd
+            elif 'mqttPass' not in config:
+                config['mqttPass'] = ""
             clientID = self._mqttClientIDtc.GetValue()
             if clientID:
                 config['mqttClientID'] = clientID
+            elif 'mqttClientID' not in config:
+                config['mqttClientID'] = ""
             mqttPub = self._mqttPubTopictc.GetValue()
             if mqttPub:
                 config['mqttPubTopic'] = mqttPub
+            elif 'mqttPubTopic' not in config:
+                config['mqttPubTopic'] = ""
             mqttSub = self._mqttSubTopictc.GetValue()
             if mqttSub:
                 config['mqttSubTopic'] = mqttSub
+            elif 'mqttSubTopic' not in config:
+                config['mqttSubTopic'] = ""
 
             print(f'New config {config}')
             json.dump(config, f)
+            f.flush()
 
             if getattr(sys, 'frozen', None):
                 basedir = sys._MEIPASS
