@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from esphomeflasher.cclib.ccproxy import CCLibProxy
+from z2mflasher.cclib.ccproxy import CCLibProxy
 
 class ChipDriver(CCLibProxy):
 	"""

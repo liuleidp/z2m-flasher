@@ -29,7 +29,7 @@ def prevent_print(func, *args, **kwargs):
     try:
         return func(*args, **kwargs)
     except serial.SerialException as err:
-        from esphomeflasher.common import EsphomeflasherError
+        from z2mflasher.common import EsphomeflasherError
 
         raise EsphomeflasherError("Serial port closed: {}".format(err))
     finally:

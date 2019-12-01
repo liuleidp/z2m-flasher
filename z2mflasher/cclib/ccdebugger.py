@@ -16,15 +16,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 from __future__ import print_function
-from esphomeflasher.cclib.ccproxy import CCLibProxy
-from esphomeflasher.cclib.cchex import toHex, fromHex
+from z2mflasher.cclib.ccproxy import CCLibProxy
+from z2mflasher.cclib.cchex import toHex, fromHex
 import math
 import time
 import sys
 
 # Chip drivers the CCDebugger will test for
-from esphomeflasher.cclib.chip.cc254x import CC254X
-from esphomeflasher.cclib.chip.cc2510 import CC2510
+from z2mflasher.cclib.chip.cc254x import CC254X
+from z2mflasher.cclib.chip.cc2510 import CC2510
 CHIP_DRIVERS = [ CC254X, CC2510 ]
 
 def openCCDebugger( port, driver=None, enterDebug=False ):

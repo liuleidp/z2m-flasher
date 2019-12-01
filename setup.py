@@ -1,19 +1,18 @@
 #!/usr/bin/env python
-"""esphomeflasher setup script."""
+"""z2mflasher setup script."""
 from setuptools import setup, find_packages
 
-from esphomeflasher import const
+from z2mflasher import const
 
-PROJECT_NAME = 'esphomeflasher'
-PROJECT_PACKAGE_NAME = 'esphomeflasher'
+PROJECT_NAME = 'z2mflasher'
+PROJECT_PACKAGE_NAME = 'z2mflasher'
 PROJECT_LICENSE = 'MIT'
-PROJECT_AUTHOR = 'ESPHome'
+PROJECT_AUTHOR = 'ESPHome, SchumyHao'
 PROJECT_COPYRIGHT = '2019, ESPHome'
-PROJECT_URL = 'https://esphome.io/guides/faq.html'
-PROJECT_EMAIL = 'contact@esphome.io'
+PROJECT_EMAIL = 'schumyhaojl@126.com'
 
-PROJECT_GITHUB_USERNAME = 'esphome'
-PROJECT_GITHUB_REPOSITORY = 'esphomeflasher'
+PROJECT_GITHUB_USERNAME = 'smarthomefans'
+PROJECT_GITHUB_REPOSITORY = 'z2m-flasher'
 
 PYPI_URL = 'https://pypi.python.org/pypi/{}'.format(PROJECT_PACKAGE_NAME)
 GITHUB_PATH = '{}/{}'.format(PROJECT_GITHUB_USERNAME, PROJECT_GITHUB_REPOSITORY)
@@ -26,6 +25,7 @@ REQUIRES = [
     'esptool==2.8',
     'requests>=2.0,<3',
     'pyserial==3.0.1',
+    'platformio==4.1.0',
 ]
 
 setup(
@@ -36,7 +36,7 @@ setup(
     download_url=DOWNLOAD_URL,
     author=PROJECT_AUTHOR,
     author_email=PROJECT_EMAIL,
-    description="ESP8266/ESP32 firmware flasher for esphomelib",
+    description="ESP8266/ESP32 firmware flasher for z2m module",
     include_package_data=True,
     zip_safe=False,
     platforms='any',
@@ -46,7 +46,7 @@ setup(
     keywords=['home', 'automation'],
     entry_points={
         'console_scripts': [
-            'esphomeflasher = esphomeflasher.__main__:main'
+            'z2mflasher = z2mflasher.__main__:main'
         ]
     },
     packages=find_packages()

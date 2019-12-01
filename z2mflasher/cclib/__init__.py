@@ -17,8 +17,8 @@
 #
 
 # Import everything from CCDebugger
-from esphomeflasher.cclib.ccdebugger import *
-from esphomeflasher.cclib.cchex import *
+from z2mflasher.cclib.ccdebugger import *
+from z2mflasher.cclib.cchex import *
 
 def getOptions(shortDesc, argHelp="", hexIn=False, hexOut=False, port=True, **kwargs):
 	"""

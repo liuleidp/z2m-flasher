@@ -9,7 +9,7 @@ from wx.lib.embeddedimage import PyEmbeddedImage
 import wx.lib.inspection
 import wx.lib.mixins.inspection
 
-from esphomeflasher.helpers import list_serial_ports
+from z2mflasher.helpers import list_serial_ports
 
 
 COLOR_RE = re.compile(r'(?:\033)(?:\[(.*?)[@-~]|\].*?(?:\007|\033\\))')
@@ -159,10 +159,10 @@ class FlashingThread(threading.Thread):
 
     def run(self):
         try:
-            from esphomeflasher.__main__ import run_esphomeflasher
+            from z2mflasher.__main__ import run_z2mflasher
 
             if not self._zigbee_firmware:
-                argv = ['esphomeflasher', '--port', self._port, '--offset', self._start_pos, self._firmware]
+                argv = ['z2mflasher', '--port', self._port, '--offset', self._start_pos, self._firmware]
                 if self._show_logs:
                     argv.append('--show-logs')
                 if not self._erase_firmware:
@@ -170,68 +170,6 @@ class FlashingThread(threading.Thread):
                 run_esphomeflasher(argv)
                 return
             else:
-                from esphomeflasher.cclib import CCHEXFile, renderDebugStatus, renderDebugConfig, openCCDebugger
-                # Read zigbee info
-                print("Read zigbee info.")
-                dbg = openCCDebugger(self._port, enterDebug=False)
-                print("\nDevice information:")
-                print(" IEEE Address : %s" % dbg.getSerial())
-                print("           PC : %04x" % dbg.getPC())
-
-                print("\nDebug status:")
-                renderDebugStatus(dbg.debugStatus)
-                print("\nDebug config:")
-                renderDebugConfig(dbg.debugConfig)
-                print("")
-
-                # Get bluegiga-specific info
-                serial = dbg.getSerial()
-
-                # Parse the HEX file
-                hexFile = CCHEXFile(self._firmware)
-                hexFile.load()
-
-                # Display sections & calculate max memory usage
-                maxMem = 0
-                print("Sections in %s:\n" % self._firmware)
-                print(" Addr.    Size")
-                print("-------- -------------")
-                for mb in hexFile.memBlocks:
-                	# Calculate top position
-                    memTop = mb.addr + mb.size
-                    if memTop > maxMem:
-                        maxMem = memTop
-
-                    # Print portion
-                    print(" 0x%04x   %i B " % (mb.addr, mb.size))
-                print("")
-
-                # Check for oversize data
-                if maxMem > (dbg.chipInfo['flash'] * 1024):
-                    print("ERROR: Data too bit to fit in chip's memory!")
-                    print("max mem %x, flash size %x" % (maxMem, dbg.chipInfo['flash'] * 1024))
-
-                # Flashing messages
-                print("\nFlashing:")
-
-                # Send chip erase
-                if True:
-                    print(" - Chip erase...")
-                    dbg.chipErase()
-
-                # Flash memory
-                dbg.pauseDMA(False)
-                print(" - Flashing %i memory blocks..." % len(hexFile.memBlocks))
-                for mb in hexFile.memBlocks:
-
-                    # Flash memory block
-                    print(" -> 0x%04x : %i bytes " % (mb.addr, mb.size))
-                    dbg.writeCODE( mb.addr, mb.bytes, verify=True, showProgress=True )
-
-                # Done
-                dbg.close()
-                print("\nCompleted")
-                print("")
 
         except Exception as e:
             print("Unexpected error: {}".format(e))

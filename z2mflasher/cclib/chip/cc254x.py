@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 from __future__ import print_function
-from esphomeflasher.cclib.chip import ChipDriver
+from z2mflasher.cclib.chip import ChipDriver
 import sys
 import time
 

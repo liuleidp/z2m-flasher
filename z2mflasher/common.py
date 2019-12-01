@@ -3,8 +3,8 @@ import struct
 
 import esptool
 
-from esphomeflasher.const import HTTP_REGEX
-from esphomeflasher.helpers import prevent_print
+from z2mflasher.const import HTTP_REGEX
+from z2mflasher.helpers import prevent_print
 
 
 class EsphomeflasherError(Exception):

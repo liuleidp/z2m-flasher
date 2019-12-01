@@ -17,7 +17,7 @@
 #
 
 # BLE112/BLE113 use a CC2540 chip
-from esphomeflasher.cclib.chip.cc254x import CC254X
+from z2mflasher.cclib.chip.cc254x import CC254X
 
 class BlueGigaCCDebugger(CC254X):
 	"""

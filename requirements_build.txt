@@ -3,3 +3,4 @@ esptool==2.8
 requests>=2.0,<3
 pyinstaller
 pyserial==3.0.1
+platformio==4.1.0
