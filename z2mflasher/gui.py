@@ -145,62 +145,107 @@ class RedirectText:
         pass
 
 
-class FlashingThread(threading.Thread):
-    def __init__(self, parent, firmware, port, pos='0', show_logs=False, zigbee=False, erase=True):
+class FlashBaseThread(threading.Thread):
+    def __init__(self, port):
         threading.Thread.__init__(self)
         self.daemon = True
-        self._parent = parent
-        self._firmware = firmware
         self._port = port
-        self._start_pos = pos
-        self._show_logs = show_logs
-        self._zigbee_firmware = zigbee
-        self._erase_firmware = erase
 
-    def run(self):
+    def flash_esp(self, firmware_name, erase=False):
         try:
-            from z2mflasher.__main__ import run_z2mflasher
-
-            if not self._zigbee_firmware:
-                argv = ['z2mflasher', '--port', self._port, '--offset', self._start_pos, self._firmware]
-                if self._show_logs:
-                    argv.append('--show-logs')
-                if not self._erase_firmware:
-                    argv.append('--no-erase')
-                run_esphomeflasher(argv)
-                return
-            else:
-
+            from z2mflasher.__main__ import run_esphomeflasher
+            argv = ['z2mflasher',
+                '--esp8266',
+                '--port', self._port,
+                '--binary', firmware_name]
+            if not erase:
+                argv.append('--no-erase')
+            run_esphomeflasher(argv)
+            return
         except Exception as e:
             print("Unexpected error: {}".format(e))
             raise
 
-class FlashZigbeeThread(threading.Thread):
-    def __init__(self, parent, port, cclib, zigbee, restore=None):
-        threading.Thread.__init__(self)
-        self.daemon = True
-        self._parent = parent
+    def flash_zigbee(self, firmware_name):
+        try:
+            from z2mflasher.__main__ import run_esphomeflasher
+            argv = ['z2mflasher',
+                '--cc253x',
+                '--port', self._port,
+                '--binary', firmware_name]
+            run_esphomeflasher(argv)
+            return
+        except Exception as e:
+            print("Unexpected error: {}".format(e))
+            raise
+
+    def flash_spiffs(self, ssid = None, password = None, hostname = None, tcp_port = None):
+        try:
+            from z2mflasher.__main__ import run_esphomeflasher
+
+            if ssid or password or hostname or tcp_port is not None:
+                argv = ['z2mflasher']
+
+                if ssid:
+                    argv.append('--ssid')
+                    argv.append(ssid)
+                if password:
+                    argv.append('--password')
+                    argv.append(password)
+                if hostname:
+                    argv.append('--hostname')
+                    argv.append(hostname)
+                if tcp_port:
+                    argv.append('--tcpport')
+                    argv.append(tcp_port)
+                run_esphomeflasher(argv)
+
+            return
+        except Exception as e:
+            print("Unexpected error: {}".format(e))
+            raise
+
+    def show_logs(self):
+        try:
+            from z2mflasher.__main__ import run_esphomeflasher
+            argv = ['z2mflasher',
+                '--show-logs',
+                '--port', self._port]
+            run_esphomeflasher(argv)
+            return
+        except Exception as e:
+            print("Unexpected error: {}".format(e))
+            raise
+
+
+class FlashingESPThread(FlashBaseThread):
+    def __init__(self, port, firmware, erase=False):
+        FlashBaseThread.__init__(port)
+        self._esp_firmware = firmware
+        self._erase_firmware = erase
+
+    def run(self):
+        self.flash_esp(self._esp_firmware, self._erase_firmware)
+
+
+class FlashZigbeeThread(FlashBaseThread):
+    def __init__(self, port, cclib, zigbee, restore=None):
+        FlashBaseThread.__init__(port)
         self._cclib_firmware = cclib
-        self._port = port
         self._zigbee_firmware = zigbee
         self._restore_firmware = restore
 
     def run(self):
         import time
-        
+
         print("Flash cclib firmware to ESP first.")
-        # flash cclib firmware to ESP
-        cclibworker = FlashingThread(self, self._cclib_firmware, self._port)
-        cclibworker.start()
-        cclibworker.join()
+        self.flash_esp(self._cclib_firmware)
         print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
         for s in range(FLASH_DELAY_S):
             print("%d ..." % s)
             time.sleep(1)
         print("Flash Zigbee firmware to module.")
-        zigbeeworker = FlashingThread(self, self._zigbee_firmware, self._port, zigbee=True)
-        zigbeeworker.start()
-        zigbeeworker.join()
+        self.flash_zigbee(self._zigbee_firmware)
 
         if self._restore_firmware is not None:
             # Restore esp firmware.
@@ -209,52 +254,47 @@ class FlashZigbeeThread(threading.Thread):
             for s in range(FLASH_DELAY_S):
                 print("%d ..." % s)
                 time.sleep(1)
-            espworker = FlashingThread(self, self._restore_firmware, self._port)
-            espworker.start()
-            espworker.join()
+            self.flash_esp(self._restore_firmware)
 
 
 class FlashAllThread(threading.Thread):
-    def __init__(self, parent, port, cclib, zigbee, esp, spiffs):
-        threading.Thread.__init__(self)
-        self.daemon = True
-        self._parent = parent
+    def __init__(self, port, cclib, zigbee, esp,
+                 ssid = None, password = None, hostname = None, tcp_port = None):
+        FlashBaseThread.__init__(port)
         self._cclib_firmware = cclib
-        self._port = port
         self._zigbee_firmware = zigbee
         self._esp_firmware = esp
-        self._spiffs = spiffs
+        self._ssid = ssid
+        self._password = password
+        self._hostname = hostname
+        self._tcp_port = tcp_port
 
     def run(self):
         import time
 
         print("Flash cclib firmware to ESP first.")
-        # flash cclib firmware to ESP
-        cclibworker = FlashingThread(self, self._cclib_firmware, self._port)
-        cclibworker.start()
-        cclibworker.join()
+        self.flash_esp(self._cclib_firmware)
         print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
         for s in range(FLASH_DELAY_S):
             print("%d ..." % s)
             time.sleep(1)
         print("Flash Zigbee firmware to module.")
-        zigbeeworker = FlashingThread(self, self._zigbee_firmware, self._port, zigbee=True)
-        zigbeeworker.start()
-        zigbeeworker.join()
-        # Flash esp firmware.
+        self.flash_zigbee(self._zigbee_firmware)
         print("Flash esp firmware.")
         print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
         for s in range(FLASH_DELAY_S):
             print("%d ..." % s)
             time.sleep(1)
-        espworker = FlashingThread(self, self._esp_firmware, self._port)
-        espworker.start()
-        espworker.join()
+        self.flash_esp(self._esp_firmware, erase = True)
         # Flash wifi/mqtt info.
         print("Flash wifi info.")
-        spiffsworker = FlashingThread(self, self._spiffs, self._port, pos = '1966080', erase=False)
-        spiffsworker.start()
-        spiffsworker.join()
+        print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
+        for s in range(FLASH_DELAY_S):
+            print("%d ..." % s)
+            time.sleep(1)
+        self.flash_spiffs(self._ssid, self._password,
+                          self._hostname, self._tcp_port)
+
 
 class MainFrame(wx.Frame):
     def __init__(self, parent, title):
@@ -280,100 +320,20 @@ class MainFrame(wx.Frame):
 
         def on_esp_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashingThread(self, self._esp_firmware, self._port)
+            worker = FlashingESPThread(self._port, self._esp_firmware)
             worker.start()
 
         def on_zigbee_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashZigbeeThread(self, self._port, self._cclib_firmware, self._zigbee_firmware, self._esp_firmware)
+            worker = FlashZigbeeThread(self._port, self._cclib_firmware, self._zigbee_firmware, self._esp_firmware)
             worker.start()
 
         def gen_spiffs():
-            import subprocess
-            import json
-            import os
-
-            config = {}
-            f = None
-            try:
-                if not os.path.exists('data'):
-                    os.makedirs('data')
-                f = open(os.path.join('data', 'config.json'), 'r+')
-                config = json.load(f)
-                f.seek(0, 0)
-                print(f'Exist config {config}')
-            except:
-                f = open(os.path.join('data', 'config.json'), 'w+')
-                print('New config file')
-
             ssid = self._ssidtc.GetValue()
-            if ssid:
-                config['ssid'] = ssid
-            elif 'ssid' not in config:
-                config['ssid'] = ""
             passwd = self._passwdtc.GetValue()
-            if passwd:
-                config['password'] = passwd
-            elif 'password' not in config:
-                config['password'] = ""
             hostname = self._hostnametc.GetValue()
-            if hostname:
-                config['hostname'] = hostname
-            elif 'hostname' not in config:
-                config['hostname'] = ""
             tcp_port = self._tcptc.GetValue()
-            if tcp_port:
-                config['tcpPort'] = int(tcp_port)
-            elif 'tcpPort' not in config:
-                config['tcpPort'] = 8880
-            mqttip = self._mqttiptc.GetValue()
-            if mqttip:
-                config['mqttServer'] = mqttip
-            elif 'mqttServer' not in config:
-                config['mqttServer'] = ""
-            mqttport = self._mqttporttc.GetValue()
-            if mqttport:
-                config['mqttPort'] = int(mqttport)
-            elif 'mqttPort' not in config:
-                config['mqttPort'] = 1883
-            mqttuser = self._mqttusertc.GetValue()
-            if mqttuser:
-                config['mqttUser'] = mqttuser
-            elif 'mqttUser' not in config:
-                config['mqttUser'] = ""
-            mqttpasswd = self._mqttpasswdtc.GetValue()
-            if mqttpasswd:
-                config['mqttPass'] = mqttpasswd
-            elif 'mqttPass' not in config:
-                config['mqttPass'] = ""
-            clientID = self._mqttClientIDtc.GetValue()
-            if clientID:
-                config['mqttClientID'] = clientID
-            elif 'mqttClientID' not in config:
-                config['mqttClientID'] = ""
-            mqttPub = self._mqttPubTopictc.GetValue()
-            if mqttPub:
-                config['mqttPubTopic'] = mqttPub
-            elif 'mqttPubTopic' not in config:
-                config['mqttPubTopic'] = ""
-            mqttSub = self._mqttSubTopictc.GetValue()
-            if mqttSub:
-                config['mqttSubTopic'] = mqttSub
-            elif 'mqttSubTopic' not in config:
-                config['mqttSubTopic'] = ""
-
-            print(f'New config {config}')
-            json.dump(config, f)
-            f.flush()
-
-            if getattr(sys, 'frozen', None):
-                basedir = sys._MEIPASS
-            else:
-                basedir = os.path.dirname(__file__)
-            mkspiffsexe=os.path.join(basedir, 'tools', 'mkspiffs', 'win', 'mkspiffs.exe')
-            print(f'Create spiffs use {mkspiffsexe}')
-            #mkspiffs.exe -c data -p 256 -b 4096 -s 110592 spiffs.bin
-            subprocess.run([mkspiffsexe, "-c", "data", "-p", "256", "-b", "4096", "-s", "110592", "spiffs.bin"])
+            return (ssid, passwd, hostname, tcp_port)
 
         def on_logs_clicked(event):
             self.console_ctrl.SetValue("")
@@ -480,49 +440,49 @@ class MainFrame(wx.Frame):
         wifi_boxsizer.AddStretchSpacer(0)
         wifi_boxsizer.Add(self._tcptc, 0, wx.ALIGN_CENTER)
 
-        mqtt_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
-        mqttipst = wx.StaticText(panel, label='ip')
-        self._mqttiptc = wx.TextCtrl(panel)
-        mqttportst = wx.StaticText(panel, label='port')
-        self._mqttporttc = wx.TextCtrl(panel)
-        mqttuserst = wx.StaticText(panel, label='user')
-        self._mqttusertc = wx.TextCtrl(panel)
-        mqttpasswdst = wx.StaticText(panel, label='password')
-        self._mqttpasswdtc = wx.TextCtrl(panel)
-        mqtt_boxsizer.Add(mqttipst, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(self._mqttiptc, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(mqttportst, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(self._mqttporttc, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(mqttuserst, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(self._mqttusertc, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(mqttpasswdst, 0, wx.ALIGN_CENTER)
-        mqtt_boxsizer.AddStretchSpacer(0)
-        mqtt_boxsizer.Add(self._mqttpasswdtc, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+#        mqttipst = wx.StaticText(panel, label='ip')
+#        self._mqttiptc = wx.TextCtrl(panel)
+#        mqttportst = wx.StaticText(panel, label='port')
+#        self._mqttporttc = wx.TextCtrl(panel)
+#        mqttuserst = wx.StaticText(panel, label='user')
+#        self._mqttusertc = wx.TextCtrl(panel)
+#        mqttpasswdst = wx.StaticText(panel, label='password')
+#        self._mqttpasswdtc = wx.TextCtrl(panel)
+#        mqtt_boxsizer.Add(mqttipst, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(self._mqttiptc, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(mqttportst, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(self._mqttporttc, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(mqttuserst, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(self._mqttusertc, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(mqttpasswdst, 0, wx.ALIGN_CENTER)
+#        mqtt_boxsizer.AddStretchSpacer(0)
+#        mqtt_boxsizer.Add(self._mqttpasswdtc, 0, wx.ALIGN_CENTER)
         
-        mqtt2_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
-        mqttClientIDst = wx.StaticText(panel, label='Client ID')
-        self._mqttClientIDtc = wx.TextCtrl(panel)
-        mqttPubTopicst = wx.StaticText(panel, label='Publish topic')
-        self._mqttPubTopictc = wx.TextCtrl(panel)
-        mqttSubTopicst = wx.StaticText(panel, label='Subscribe topic')
-        self._mqttSubTopictc = wx.TextCtrl(panel)
-        mqtt2_boxsizer.Add(mqttClientIDst, 0, wx.ALIGN_CENTER)
-        mqtt2_boxsizer.AddStretchSpacer(0)
-        mqtt2_boxsizer.Add(self._mqttClientIDtc, 0, wx.ALIGN_CENTER)
-        mqtt2_boxsizer.AddStretchSpacer(0)
-        mqtt2_boxsizer.Add(mqttPubTopicst, 0, wx.ALIGN_CENTER)
-        mqtt2_boxsizer.AddStretchSpacer(0)
-        mqtt2_boxsizer.Add(self._mqttPubTopictc, 0, wx.ALIGN_CENTER)
-        mqtt2_boxsizer.AddStretchSpacer(0)
-        mqtt2_boxsizer.Add(mqttSubTopicst, 0, wx.ALIGN_CENTER)
-        mqtt2_boxsizer.AddStretchSpacer(0)
-        mqtt2_boxsizer.Add(self._mqttSubTopictc, 0, wx.ALIGN_CENTER)
+#        mqtt2_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
+#        mqttClientIDst = wx.StaticText(panel, label='Client ID')
+#        self._mqttClientIDtc = wx.TextCtrl(panel)
+#        mqttPubTopicst = wx.StaticText(panel, label='Publish topic')
+#        self._mqttPubTopictc = wx.TextCtrl(panel)
+#        mqttSubTopicst = wx.StaticText(panel, label='Subscribe topic')
+#        self._mqttSubTopictc = wx.TextCtrl(panel)
+#        mqtt2_boxsizer.Add(mqttClientIDst, 0, wx.ALIGN_CENTER)
+#        mqtt2_boxsizer.AddStretchSpacer(0)
+#        mqtt2_boxsizer.Add(self._mqttClientIDtc, 0, wx.ALIGN_CENTER)
+#        mqtt2_boxsizer.AddStretchSpacer(0)
+#        mqtt2_boxsizer.Add(mqttPubTopicst, 0, wx.ALIGN_CENTER)
+#        mqtt2_boxsizer.AddStretchSpacer(0)
+#        mqtt2_boxsizer.Add(self._mqttPubTopictc, 0, wx.ALIGN_CENTER)
+#        mqtt2_boxsizer.AddStretchSpacer(0)
+#        mqtt2_boxsizer.Add(mqttSubTopicst, 0, wx.ALIGN_CENTER)
+#        mqtt2_boxsizer.AddStretchSpacer(0)
+#        mqtt2_boxsizer.Add(self._mqttSubTopictc, 0, wx.ALIGN_CENTER)
 
         logs_button = wx.Button(panel, -1, "View Logs")
         logs_button.Bind(wx.EVT_BUTTON, on_logs_clicked)
@@ -540,7 +500,7 @@ class MainFrame(wx.Frame):
         zigbee_file_label = wx.StaticText(panel, label="Zigbee Firmware")
         flash_file_label = wx.StaticText(panel, label="Flash")
         wifi_info_label = wx.StaticText(panel, label="WiFi info")
-        MQTT_info_label = wx.StaticText(panel, label="MQTT info")
+#        MQTT_info_label = wx.StaticText(panel, label="MQTT info")
 
         console_label = wx.StaticText(panel, label="Console")
 
@@ -558,14 +518,14 @@ class MainFrame(wx.Frame):
             # WiFi info
             wifi_info_label, (wifi_boxsizer, 1, wx.EXPAND),
             # MQTT info
-            MQTT_info_label, (mqtt_boxsizer, 1, wx.EXPAND),
-            (wx.StaticText(panel, label="")), (mqtt2_boxsizer, 1, wx.EXPAND),
+#            MQTT_info_label, (mqtt_boxsizer, 1, wx.EXPAND),
+#            (wx.StaticText(panel, label="")), (mqtt2_boxsizer, 1, wx.EXPAND),
             # View Logs button
             (wx.StaticText(panel, label="")), (logs_button, 1, wx.EXPAND),
             # Console View (growable)
             (console_label, 1, wx.EXPAND), (self.console_ctrl, 1, wx.EXPAND),
         ])
-        fgs.AddGrowableRow(9, 1)
+        fgs.AddGrowableRow(7, 1)
         fgs.AddGrowableCol(1, 1)
         hbox.Add(fgs, proportion=2, flag=wx.ALL | wx.EXPAND, border=15)
         panel.SetSizer(hbox)
