@@ -1,6 +1,6 @@
-# esphomeflasher
+# z2m-flasher
 
-esphomeflasher is a utility app for the [esphomelib](https://esphomelib.com/esphomeyaml/index.html)
+z2m-flasher is a utility app for the [esphomelib](https://esphomelib.com/esphomeyaml/index.html)
 framework and is designed to make flashing ESPs with esphomelib as simple as possible by:
 
  * Having pre-built binaries for most operating systems.

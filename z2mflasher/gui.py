@@ -127,19 +127,20 @@ class RedirectText:
 
     def write(self, string):
         for s in string:
-            if s == '\r':
-                current_value = self._out.GetValue()
-                last_newline = current_value.rfind("\n")
-                wx.CallAfter(self._out.Remove, last_newline + 1, len(current_value))
-                self._line += '\n'
-                self._write_line()
-                self._line = ''
-                continue
-            self._line += s
-            if s == '\n':
-                self._write_line()
-                self._line = ''
-                continue
+            if isinstance(s, str):
+                if s == '\r':
+                    current_value = self._out.GetValue()
+                    last_newline = current_value.rfind("\n")
+                    wx.CallAfter(self._out.Remove, last_newline + 1, len(current_value))
+                    self._line += '\n'
+                    self._write_line()
+                    self._line = ''
+                    continue
+                self._line += s
+                if s == '\n':
+                    self._write_line()
+                    self._line = ''
+                    continue
 
     def flush(self):
         pass
@@ -184,7 +185,7 @@ class FlashBaseThread(threading.Thread):
             from z2mflasher.__main__ import run_esphomeflasher
 
             if ssid or password or hostname or tcp_port is not None:
-                argv = ['z2mflasher']
+                argv = ['z2mflasher', '--port', self._port,]
 
                 if ssid:
                     argv.append('--ssid')
@@ -220,7 +221,7 @@ class FlashBaseThread(threading.Thread):
 
 class FlashingESPThread(FlashBaseThread):
     def __init__(self, port, firmware, erase=False):
-        FlashBaseThread.__init__(port)
+        FlashBaseThread.__init__(self, port)
         self._esp_firmware = firmware
         self._erase_firmware = erase
 
@@ -228,9 +229,30 @@ class FlashingESPThread(FlashBaseThread):
         self.flash_esp(self._esp_firmware, self._erase_firmware)
 
 
+class FlashingInfoThread(FlashBaseThread):
+    def __init__(self, port, ssid=None, password=None, hostname=None, tcp_port=None):
+        FlashBaseThread.__init__(self, port)
+        self._ssid = ssid
+        self._password = password
+        self._hostname = hostname
+        self._tcp_port = tcp_port
+
+    def run(self):
+        self.flash_spiffs(self._ssid, self._password,
+                          self._hostname, self._tcp_port)
+
+
+class ShowLogThread(FlashBaseThread):
+    def __init__(self, port):
+        FlashBaseThread.__init__(self, port)
+
+    def run(self):
+        self.show_logs()
+
+
 class FlashZigbeeThread(FlashBaseThread):
     def __init__(self, port, cclib, zigbee, restore=None):
-        FlashBaseThread.__init__(port)
+        FlashBaseThread.__init__(self, port)
         self._cclib_firmware = cclib
         self._zigbee_firmware = zigbee
         self._restore_firmware = restore
@@ -257,10 +279,10 @@ class FlashZigbeeThread(FlashBaseThread):
             self.flash_esp(self._restore_firmware)
 
 
-class FlashAllThread(threading.Thread):
+class FlashAllThread(FlashBaseThread):
     def __init__(self, port, cclib, zigbee, esp,
                  ssid = None, password = None, hostname = None, tcp_port = None):
-        FlashBaseThread.__init__(port)
+        FlashBaseThread.__init__(self, port)
         self._cclib_firmware = cclib
         self._zigbee_firmware = zigbee
         self._esp_firmware = esp
@@ -305,6 +327,7 @@ class MainFrame(wx.Frame):
         self._cclib_firmware = None
         self._zigbee_firmware = None
         self._port = None
+        self._erase = False
 
         self._init_ui()
 
@@ -320,7 +343,7 @@ class MainFrame(wx.Frame):
 
         def on_esp_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashingESPThread(self._port, self._esp_firmware)
+            worker = FlashingESPThread(self._port, self._esp_firmware, self._erase)
             worker.start()
 
         def on_zigbee_clicked(event):
@@ -337,21 +360,25 @@ class MainFrame(wx.Frame):
 
         def on_logs_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashingThread(self, 'dummy', self._port, show_logs=True)
+            worker = ShowLogThread(self._port)
             worker.start()
 
         def on_info_clicked(event):
             self.console_ctrl.SetValue("")
-            gen_spiffs()
-            worker = FlashingThread(self, 'spiffs.bin', self._port, pos = '1966080', erase = False)
+            (ssid, passwd, hostname, tcp_port) = gen_spiffs()
+            worker = FlashingInfoThread(self._port, ssid, passwd, hostname, tcp_port)
             worker.start()
 
         def on_flash_all_clicked(event):
             self.console_ctrl.SetValue("")
-            gen_spiffs()
-            worker = FlashAllThread(self, self._port, self._cclib_firmware,
-                                    self._zigbee_firmware, self._esp_firmware, 'spiffs.bin')
+            (ssid, passwd, hostname, tcp_port) = gen_spiffs()
+            worker = FlashAllThread(self._port, self._cclib_firmware, self._zigbee_firmware,
+                                    self._esp_firmware, ssid, passwd, hostname, tcp_port)
             worker.start()
+        
+        def on_erase_clicked(event):
+            cb = event.GetEventObject() 
+            self._erase = cb.GetValue()
 
         def on_select_port(event):
             choice = event.GetEventObject()
@@ -406,12 +433,17 @@ class MainFrame(wx.Frame):
         flash_all_button = wx.Button(panel, -1, "All")
         flash_all_button.Bind(wx.EVT_BUTTON, on_flash_all_clicked)
 
+        erase_checkbox = wx.CheckBox(panel, label = 'Erase ESP') 
+        erase_checkbox.Bind(wx.EVT_CHECKBOX, on_erase_clicked)
+
         flash_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         flash_boxsizer.Add(esp_button, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
-        flash_boxsizer.Add(info_button, 0, wx.ALIGN_CENTER)
+        flash_boxsizer.Add(erase_checkbox, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
         flash_boxsizer.Add(zigbee_button, 0, wx.ALIGN_CENTER)
+        flash_boxsizer.AddStretchSpacer(0)
+        flash_boxsizer.Add(info_button, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
         flash_boxsizer.Add(flash_all_button, 0, wx.ALIGN_CENTER)
 
