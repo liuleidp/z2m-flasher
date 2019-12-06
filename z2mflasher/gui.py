@@ -127,20 +127,19 @@ class RedirectText:
 
     def write(self, string):
         for s in string:
-            if isinstance(s, str):
-                if s == '\r':
-                    current_value = self._out.GetValue()
-                    last_newline = current_value.rfind("\n")
-                    wx.CallAfter(self._out.Remove, last_newline + 1, len(current_value))
-                    self._line += '\n'
-                    self._write_line()
-                    self._line = ''
-                    continue
-                self._line += s
-                if s == '\n':
-                    self._write_line()
-                    self._line = ''
-                    continue
+            if s == '\r':
+                current_value = self._out.GetValue()
+                last_newline = current_value.rfind("\n")
+                wx.CallAfter(self._out.Remove, last_newline + 1, len(current_value))
+                self._line += '\n'
+                self._write_line()
+                self._line = ''
+                continue
+            self._line += s
+            if s == '\n':
+                self._write_line()
+                self._line = ''
+                continue
 
     def flush(self):
         pass
@@ -199,9 +198,19 @@ class FlashBaseThread(threading.Thread):
                 if tcp_port:
                     argv.append('--tcpport')
                     argv.append(tcp_port)
-                run_esphomeflasher(argv)
 
-            return
+                stdout = sys.stdout
+                with open('pio_log.txt', 'w+') as logf:
+                    sys.stdout = logf
+                    try:
+                        run_esphomeflasher(argv)
+                        logf.close()
+                        sys.stdout = stdout
+                        print("spiffs flash done.")
+                    except Exception as e:
+                        logf.close()
+                        sys.stdout = stdout
+                        print("Upload spiffs error: {}".format(e))
         except Exception as e:
             print("Unexpected error: {}".format(e))
             raise
@@ -331,7 +340,11 @@ class MainFrame(wx.Frame):
 
         self._init_ui()
 
-        sys.stdout = RedirectText(self.console_ctrl)
+        self._stdout = sys.stdout
+        self._stderr = sys.stderr
+        self._redirect = RedirectText(self.console_ctrl)
+        sys.stdout = self._redirect
+        sys.stderr = self._redirect
 
         self.SetMinSize((640, 480))
         self.Centre(wx.BOTH)
