@@ -328,7 +328,7 @@ def run_esphomeflasher(argv):
         try:
             upload_spiffs(args, port)
         except Exception as e:
-            raise EsphomeflasherError("Create info spiffs failed.")
+            raise EsphomeflasherError(f"Create info spiffs failed. {e}")
 
     print("Done! Flashing is complete!")
     print()
