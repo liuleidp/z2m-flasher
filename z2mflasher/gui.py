@@ -199,18 +199,11 @@ class FlashBaseThread(threading.Thread):
                     argv.append('--tcpport')
                     argv.append(tcp_port)
 
-                stdout = sys.stdout
-                with open('pio_log.txt', 'w+') as logf:
-                    sys.stdout = logf
-                    try:
-                        run_esphomeflasher(argv)
-                        logf.close()
-                        sys.stdout = stdout
-                        print("spiffs flash done.")
-                    except Exception as e:
-                        logf.close()
-                        sys.stdout = stdout
-                        print("Upload spiffs error: {}".format(e))
+                try:
+                    run_esphomeflasher(argv)
+                    print("spiffs flash done.")
+                except Exception as e:
+                    print("Upload spiffs error: {}".format(e))
         except Exception as e:
             print("Unexpected error: {}".format(e))
             raise

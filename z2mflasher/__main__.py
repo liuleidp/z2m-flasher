@@ -293,16 +293,38 @@ def upload_spiffs(args, port):
         f.flush()
         f.close()
 
-        with open("platformio.ini", "w+") as f:
-            f.write(PLATFORMIO_INI)
-            f.write(f'upload_port = {port}')
-            f.close()
+    def create_spiffs_bin():
+        import os
+        from z2mflasher.spiffsgen import (
+            SpiffsBuildConfig, SPIFFS_PAGE_IX_LEN, SPIFFS_BLOCK_IX_LEN, SPIFFS_OBJ_ID_LEN,
+            SPIFFS_SPAN_IX_LEN, SpiffsFS)
 
-    from platformio.__main__ import main
+        with open("spiffs.bin", "wb") as image_file:
+            image_size = 110592
+            spiffs_build_default = SpiffsBuildConfig(
+                256, SPIFFS_PAGE_IX_LEN,
+                4096, SPIFFS_BLOCK_IX_LEN,
+                1, 32, SPIFFS_OBJ_ID_LEN, SPIFFS_SPAN_IX_LEN,
+                True, True, "little",
+                True, False)
+
+            spiffs = SpiffsFS(image_size, spiffs_build_default)
+
+            for root, dirs, files in os.walk('./data', followlinks=False):
+                for f in files:
+                    full_path = os.path.join(root, f)
+                    spiffs.create_file("/" + os.path.relpath(full_path, './data').replace("\\", "/"), full_path)
+
+            image = spiffs.to_binary()
+
+            image_file.write(image)
 
     create_file()
-    argv = ["platformio", "run", "--target", "uploadfs"]
-    main(argv)
+    create_spiffs_bin()
+    args.offset = 1966080
+    args.binary = "spiffs.bin"
+    args.no_erase = True
+    esp_flash(args, port)
     return
 
 def run_esphomeflasher(argv):
