@@ -1,6 +1,6 @@
 import re
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 ESP32_DEFAULT_OTA_DATA = 'https://raw.githubusercontent.com/espressif/arduino-esp32/1.0.0/tools/partitions/boot_app0.bin'
 ESP32_DEFAULT_BOOTLOADER_FORMAT = 'https://raw.githubusercontent.com/espressif/arduino-esp32/' \

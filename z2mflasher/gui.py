@@ -27,6 +27,7 @@ FORE_COLORS = {**COLORS, None: wx.WHITE}
 BACK_COLORS = {**COLORS, None: wx.BLACK}
 FLASH_DELAY_S = 5
 
+FILESYSTEM_OFFSET = '1048576' #0x100000
 
 # See discussion at http://stackoverflow.com/q/41101897/131929
 class RedirectText:
@@ -151,13 +152,16 @@ class FlashBaseThread(threading.Thread):
         self.daemon = True
         self._port = port
 
-    def flash_esp(self, firmware_name, erase=False):
+    def flash_esp(self, firmware_name, offset=0, erase=False):
         try:
             from z2mflasher.__main__ import run_esphomeflasher
             argv = ['z2mflasher',
                 '--esp8266',
                 '--port', self._port,
                 '--binary', firmware_name]
+            if offset != 0:
+                argv.append('--offset')
+                argv.append(offset)
             if not erase:
                 argv.append('--no-erase')
             run_esphomeflasher(argv)
@@ -166,168 +170,46 @@ class FlashBaseThread(threading.Thread):
             print("Unexpected error: {}".format(e))
             raise
 
-    def flash_zigbee(self, firmware_name):
-        try:
-            from z2mflasher.__main__ import run_esphomeflasher
-            argv = ['z2mflasher',
-                '--cc253x',
-                '--port', self._port,
-                '--binary', firmware_name]
-            run_esphomeflasher(argv)
-            return
-        except Exception as e:
-            print("Unexpected error: {}".format(e))
-            raise
-
-    def flash_spiffs(self, ssid = None, password = None, hostname = None, tcp_port = None):
-        try:
-            from z2mflasher.__main__ import run_esphomeflasher
-
-            if ssid or password or hostname or tcp_port is not None:
-                argv = ['z2mflasher', '--port', self._port,]
-
-                if ssid:
-                    argv.append('--ssid')
-                    argv.append(ssid)
-                if password:
-                    argv.append('--password')
-                    argv.append(password)
-                if hostname:
-                    argv.append('--hostname')
-                    argv.append(hostname)
-                if tcp_port:
-                    argv.append('--tcpport')
-                    argv.append(tcp_port)
-
-                try:
-                    run_esphomeflasher(argv)
-                    print("spiffs flash done.")
-                except Exception as e:
-                    print("Upload spiffs error: {}".format(e))
-        except Exception as e:
-            print("Unexpected error: {}".format(e))
-            raise
-
-    def show_logs(self):
-        try:
-            from z2mflasher.__main__ import run_esphomeflasher
-            argv = ['z2mflasher',
-                '--show-logs',
-                '--port', self._port]
-            run_esphomeflasher(argv)
-            return
-        except Exception as e:
-            print("Unexpected error: {}".format(e))
-            raise
-
 
 class FlashingESPThread(FlashBaseThread):
-    def __init__(self, port, firmware, erase=False):
+    def __init__(self, port, firmware, offset=0, erase=False):
         FlashBaseThread.__init__(self, port)
         self._esp_firmware = firmware
         self._erase_firmware = erase
+        self._offset = offset
 
     def run(self):
-        self.flash_esp(self._esp_firmware, self._erase_firmware)
-
-
-class FlashingInfoThread(FlashBaseThread):
-    def __init__(self, port, ssid=None, password=None, hostname=None, tcp_port=None):
-        FlashBaseThread.__init__(self, port)
-        self._ssid = ssid
-        self._password = password
-        self._hostname = hostname
-        self._tcp_port = tcp_port
-
-    def run(self):
-        self.flash_spiffs(self._ssid, self._password,
-                          self._hostname, self._tcp_port)
-
-
-class ShowLogThread(FlashBaseThread):
-    def __init__(self, port):
-        FlashBaseThread.__init__(self, port)
-
-    def run(self):
-        self.show_logs()
-
-
-class FlashZigbeeThread(FlashBaseThread):
-    def __init__(self, port, cclib, zigbee, restore=None):
-        FlashBaseThread.__init__(self, port)
-        self._cclib_firmware = cclib
-        self._zigbee_firmware = zigbee
-        self._restore_firmware = restore
-
-    def run(self):
-        import time
-
-        print("Flash cclib firmware to ESP first.")
-        self.flash_esp(self._cclib_firmware)
-        print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
-        for s in range(FLASH_DELAY_S):
-            print("%d ..." % s)
-            time.sleep(1)
-        print("Flash Zigbee firmware to module.")
-        self.flash_zigbee(self._zigbee_firmware)
-
-        if self._restore_firmware is not None:
-            # Restore esp firmware.
-            print("Restore esp firmware.")
-            print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
-            for s in range(FLASH_DELAY_S):
-                print("%d ..." % s)
-                time.sleep(1)
-            self.flash_esp(self._restore_firmware)
+        self.flash_esp(self._esp_firmware, self._offset, self._erase_firmware)
 
 
 class FlashAllThread(FlashBaseThread):
-    def __init__(self, port, cclib, zigbee, esp,
-                 ssid = None, password = None, hostname = None, tcp_port = None):
+    def __init__(self, port, esp, fs, erase=False):
         FlashBaseThread.__init__(self, port)
-        self._cclib_firmware = cclib
-        self._zigbee_firmware = zigbee
         self._esp_firmware = esp
-        self._ssid = ssid
-        self._password = password
-        self._hostname = hostname
-        self._tcp_port = tcp_port
+        self._esp_fs = fs
+        self._erase_firmware = erase
 
     def run(self):
         import time
 
-        print("Flash cclib firmware to ESP first.")
-        self.flash_esp(self._cclib_firmware)
+        print("Flash File system to ESP first.")
+        self.flash_esp(self._esp_fs, FILESYSTEM_OFFSET, self._erase_firmware)
         print("Please press reset button. Wait %d seconds." % FLASH_DELAY_S)
         for s in range(FLASH_DELAY_S):
             print("%d ..." % s)
             time.sleep(1)
-        print("Flash Zigbee firmware to module.")
-        self.flash_zigbee(self._zigbee_firmware)
-        print("Flash esp firmware.")
-        print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
-        for s in range(FLASH_DELAY_S):
-            print("%d ..." % s)
-            time.sleep(1)
-        self.flash_esp(self._esp_firmware, erase = True)
-        # Flash wifi/mqtt info.
-        print("Flash wifi info.")
-        print("Please press reset button while hold flash button down. Wait %d seconds." % FLASH_DELAY_S)
-        for s in range(FLASH_DELAY_S):
-            print("%d ..." % s)
-            time.sleep(1)
-        self.flash_spiffs(self._ssid, self._password,
-                          self._hostname, self._tcp_port)
+        print("Flash ESP firmware to module.")
+        self.flash_esp(self._esp_firmware)
+        print("Flash Done.")
 
 
 class MainFrame(wx.Frame):
     def __init__(self, parent, title):
-        wx.Frame.__init__(self, parent, -1, title, size=(725, 650),
+        wx.Frame.__init__(self, parent, -1, title, size=(500, 500),
                           style=wx.DEFAULT_FRAME_STYLE | wx.NO_FULL_REPAINT_ON_RESIZE)
 
         self._esp_firmware = None
-        self._cclib_firmware = None
-        self._zigbee_firmware = None
+        self._esp_fs = None
         self._port = None
         self._erase = False
 
@@ -339,7 +221,7 @@ class MainFrame(wx.Frame):
         sys.stdout = self._redirect
         sys.stderr = self._redirect
 
-        self.SetMinSize((640, 480))
+        self.SetMinSize((500, 380))
         self.Centre(wx.BOTH)
         self.Show(True)
 
@@ -352,34 +234,14 @@ class MainFrame(wx.Frame):
             worker = FlashingESPThread(self._port, self._esp_firmware, self._erase)
             worker.start()
 
-        def on_zigbee_clicked(event):
+        def on_esp_fs_clicked(event):
             self.console_ctrl.SetValue("")
-            worker = FlashZigbeeThread(self._port, self._cclib_firmware, self._zigbee_firmware, self._esp_firmware)
-            worker.start()
-
-        def gen_spiffs():
-            ssid = self._ssidtc.GetValue()
-            passwd = self._passwdtc.GetValue()
-            hostname = self._hostnametc.GetValue()
-            tcp_port = self._tcptc.GetValue()
-            return (ssid, passwd, hostname, tcp_port)
-
-        def on_logs_clicked(event):
-            self.console_ctrl.SetValue("")
-            worker = ShowLogThread(self._port)
-            worker.start()
-
-        def on_info_clicked(event):
-            self.console_ctrl.SetValue("")
-            (ssid, passwd, hostname, tcp_port) = gen_spiffs()
-            worker = FlashingInfoThread(self._port, ssid, passwd, hostname, tcp_port)
+            worker = FlashingESPThread(self._port, self._esp_fs, FILESYSTEM_OFFSET, self._erase)
             worker.start()
 
         def on_flash_all_clicked(event):
             self.console_ctrl.SetValue("")
-            (ssid, passwd, hostname, tcp_port) = gen_spiffs()
-            worker = FlashAllThread(self._port, self._cclib_firmware, self._zigbee_firmware,
-                                    self._esp_firmware, ssid, passwd, hostname, tcp_port)
+            worker = FlashAllThread(self._port, self._esp_firmware, self._esp_fs, self._erase)
             worker.start()
         
         def on_erase_clicked(event):
@@ -393,17 +255,14 @@ class MainFrame(wx.Frame):
         def on_pick_esp_file(event):
             self._esp_firmware = event.GetPath().replace("'", "")
 
-        def on_pick_cclib_file(event):
-            self._cclib_firmware = event.GetPath().replace("'", "")
-
-        def on_pick_zigbee_file(event):
-            self._zigbee_firmware = event.GetPath().replace("'", "")
+        def on_pick_esp_fs_file(event):
+            self._esp_fs = event.GetPath().replace("'", "")
 
         panel = wx.Panel(self)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
 
-        fgs = wx.FlexGridSizer(10, 2, 10, 10)
+        fgs = wx.FlexGridSizer(6, 2, 0, 0)
 
         self.choice = wx.Choice(panel, choices=self._get_serial_ports())
         self.choice.Bind(wx.EVT_CHOICE, on_select_port)
@@ -416,11 +275,8 @@ class MainFrame(wx.Frame):
         esp_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
         esp_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_esp_file)
 
-        cclib_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
-        cclib_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_cclib_file)
-
-        zigbee_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
-        zigbee_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_zigbee_file)
+        esp_fs_file_picker = wx.FilePickerCtrl(panel, style=wx.FLP_USE_TEXTCTRL)
+        esp_fs_file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, on_pick_esp_fs_file)
 
         serial_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         serial_boxsizer.Add(self.choice, 1, wx.EXPAND)
@@ -430,11 +286,8 @@ class MainFrame(wx.Frame):
         esp_button = wx.Button(panel, -1, "ESP")
         esp_button.Bind(wx.EVT_BUTTON, on_esp_clicked)
 
-        info_button = wx.Button(panel, -1, "WiFi/MQTT")
-        info_button.Bind(wx.EVT_BUTTON, on_info_clicked)
-
-        zigbee_button = wx.Button(panel, -1, "Zigbee")
-        zigbee_button.Bind(wx.EVT_BUTTON, on_zigbee_clicked)
+        esp_fs_button = wx.Button(panel, -1, "FileSystem")
+        esp_fs_button.Bind(wx.EVT_BUTTON, on_esp_fs_clicked)
 
         flash_all_button = wx.Button(panel, -1, "All")
         flash_all_button.Bind(wx.EVT_BUTTON, on_flash_all_clicked)
@@ -445,85 +298,11 @@ class MainFrame(wx.Frame):
         flash_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
         flash_boxsizer.Add(esp_button, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
-        flash_boxsizer.Add(erase_checkbox, 0, wx.ALIGN_CENTER)
-        flash_boxsizer.AddStretchSpacer(0)
-        flash_boxsizer.Add(zigbee_button, 0, wx.ALIGN_CENTER)
-        flash_boxsizer.AddStretchSpacer(0)
-        flash_boxsizer.Add(info_button, 0, wx.ALIGN_CENTER)
+        flash_boxsizer.Add(esp_fs_button, 0, wx.ALIGN_CENTER)
         flash_boxsizer.AddStretchSpacer(0)
         flash_boxsizer.Add(flash_all_button, 0, wx.ALIGN_CENTER)
-
-        wifi_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
-        ssidst = wx.StaticText(panel, label='ssid')
-        self._ssidtc = wx.TextCtrl(panel)
-        passwdst = wx.StaticText(panel, label='passwd')
-        self._passwdtc = wx.TextCtrl(panel)
-        hostnamest = wx.StaticText(panel, label='hostname')
-        self._hostnametc = wx.TextCtrl(panel)
-        tcpst = wx.StaticText(panel, label='tcp port')
-        self._tcptc = wx.TextCtrl(panel)
-        wifi_boxsizer.Add(ssidst, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(self._ssidtc, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(passwdst, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(self._passwdtc, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(hostnamest, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(self._hostnametc, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(tcpst, 0, wx.ALIGN_CENTER)
-        wifi_boxsizer.AddStretchSpacer(0)
-        wifi_boxsizer.Add(self._tcptc, 0, wx.ALIGN_CENTER)
-
-#        mqtt_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
-#        mqttipst = wx.StaticText(panel, label='ip')
-#        self._mqttiptc = wx.TextCtrl(panel)
-#        mqttportst = wx.StaticText(panel, label='port')
-#        self._mqttporttc = wx.TextCtrl(panel)
-#        mqttuserst = wx.StaticText(panel, label='user')
-#        self._mqttusertc = wx.TextCtrl(panel)
-#        mqttpasswdst = wx.StaticText(panel, label='password')
-#        self._mqttpasswdtc = wx.TextCtrl(panel)
-#        mqtt_boxsizer.Add(mqttipst, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(self._mqttiptc, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(mqttportst, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(self._mqttporttc, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(mqttuserst, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(self._mqttusertc, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(mqttpasswdst, 0, wx.ALIGN_CENTER)
-#        mqtt_boxsizer.AddStretchSpacer(0)
-#        mqtt_boxsizer.Add(self._mqttpasswdtc, 0, wx.ALIGN_CENTER)
-        
-#        mqtt2_boxsizer = wx.BoxSizer(wx.HORIZONTAL)
-#        mqttClientIDst = wx.StaticText(panel, label='Client ID')
-#        self._mqttClientIDtc = wx.TextCtrl(panel)
-#        mqttPubTopicst = wx.StaticText(panel, label='Publish topic')
-#        self._mqttPubTopictc = wx.TextCtrl(panel)
-#        mqttSubTopicst = wx.StaticText(panel, label='Subscribe topic')
-#        self._mqttSubTopictc = wx.TextCtrl(panel)
-#        mqtt2_boxsizer.Add(mqttClientIDst, 0, wx.ALIGN_CENTER)
-#        mqtt2_boxsizer.AddStretchSpacer(0)
-#        mqtt2_boxsizer.Add(self._mqttClientIDtc, 0, wx.ALIGN_CENTER)
-#        mqtt2_boxsizer.AddStretchSpacer(0)
-#        mqtt2_boxsizer.Add(mqttPubTopicst, 0, wx.ALIGN_CENTER)
-#        mqtt2_boxsizer.AddStretchSpacer(0)
-#        mqtt2_boxsizer.Add(self._mqttPubTopictc, 0, wx.ALIGN_CENTER)
-#        mqtt2_boxsizer.AddStretchSpacer(0)
-#        mqtt2_boxsizer.Add(mqttSubTopicst, 0, wx.ALIGN_CENTER)
-#        mqtt2_boxsizer.AddStretchSpacer(0)
-#        mqtt2_boxsizer.Add(self._mqttSubTopictc, 0, wx.ALIGN_CENTER)
-
-        logs_button = wx.Button(panel, -1, "View Logs")
-        logs_button.Bind(wx.EVT_BUTTON, on_logs_clicked)
+        flash_boxsizer.AddStretchSpacer(0)
+        flash_boxsizer.Add(erase_checkbox, 0, wx.ALIGN_CENTER)
 
         self.console_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL)
         self.console_ctrl.SetFont(wx.Font((0, 13), wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL,
@@ -534,11 +313,8 @@ class MainFrame(wx.Frame):
 
         port_label = wx.StaticText(panel, label="Serial port")
         esp_file_label = wx.StaticText(panel, label="ESP Firmware")
-        cclib_file_label = wx.StaticText(panel, label="CClib Firmware")
-        zigbee_file_label = wx.StaticText(panel, label="Zigbee Firmware")
-        flash_file_label = wx.StaticText(panel, label="Flash")
-        wifi_info_label = wx.StaticText(panel, label="WiFi info")
-#        MQTT_info_label = wx.StaticText(panel, label="MQTT info")
+        esp_fs_label = wx.StaticText(panel, label="FileSystem")
+        flash_file_label = wx.StaticText(panel, label="")
 
         console_label = wx.StaticText(panel, label="Console")
 
@@ -547,23 +323,14 @@ class MainFrame(wx.Frame):
             port_label, (serial_boxsizer, 1, wx.EXPAND),
             # ESP Firmware selection row (growable)
             esp_file_label, (esp_file_picker, 1, wx.EXPAND),
-            # CClib Firmware selection row (growable)
-            cclib_file_label, (cclib_file_picker, 1, wx.EXPAND),
-            # Zigbee Firmware selection row (growable)
-            zigbee_file_label, (zigbee_file_picker, 1, wx.EXPAND),
+            # ESP FileSystem selection row (growable)
+            esp_fs_label, (esp_fs_file_picker, 1, wx.EXPAND),
             # Flash firmware button
             flash_file_label, (flash_boxsizer, 1, wx.EXPAND),
-            # WiFi info
-            wifi_info_label, (wifi_boxsizer, 1, wx.EXPAND),
-            # MQTT info
-#            MQTT_info_label, (mqtt_boxsizer, 1, wx.EXPAND),
-#            (wx.StaticText(panel, label="")), (mqtt2_boxsizer, 1, wx.EXPAND),
-            # View Logs button
-            (wx.StaticText(panel, label="")), (logs_button, 1, wx.EXPAND),
             # Console View (growable)
             (console_label, 1, wx.EXPAND), (self.console_ctrl, 1, wx.EXPAND),
         ])
-        fgs.AddGrowableRow(7, 1)
+        fgs.AddGrowableRow(4, 1)
         fgs.AddGrowableCol(1, 1)
         hbox.Add(fgs, proportion=2, flag=wx.ALL | wx.EXPAND, border=15)
         panel.SetSizer(hbox)
